@@ -34,7 +34,7 @@
 use Glpi\Inventory\Request;
 
 if (!defined('GLPI_ROOT')) {
-    include('../inc/includes.php');
+    include(__DIR__ . '/../inc/includes.php');
 }
 
 $inventory_request = new Request();
@@ -43,9 +43,16 @@ $inventory_request->handleHeaders();
 $handle = true;
 if (isset($_GET['refused'])) {
     $refused = new RefusedEquipment();
-    $refused->getFromDB($_GET['refused']);
-    $contents = file_get_contents($refused->getInventoryFileName());
-} else if ($_SERVER['REQUEST_METHOD'] != 'POST') {
+    if ($refused->getFromDB($_GET['refused']) && ($inventory_file = $refused->getInventoryFileName()) !== null) {
+        $contents = file_get_contents($inventory_file);
+    } else {
+        trigger_error(
+            sprintf('Invalid RefusedEquipment "%s" or inventory file missing', $_GET['refused']),
+            E_USER_WARNING
+        );
+        $contents = '';
+    }
+} else if (!isCommandLine() && $_SERVER['REQUEST_METHOD'] != 'POST') {
     if (isset($_GET['action']) && $_GET['action'] == 'getConfig') {
         /**
          * Even if Fusion protocol is not supported for getConfig requests, they
@@ -59,7 +66,16 @@ if (isset($_GET['refused'])) {
     }
     $handle = false;
 } else {
-    $contents = file_get_contents("php://input");
+    if (isCommandLine()) {
+        $f = fopen('php://stdin', 'r');
+        $contents = '';
+        while ($line = fgets($f)) {
+            $contents .= $line;
+        }
+        fclose($f);
+    } else {
+        $contents = file_get_contents("php://input");
+    }
 }
 
 if ($handle === true) {
@@ -74,6 +90,9 @@ if (isset($_GET['refused'])) {
     $redirect_url = $refused->handleInventoryRequest($inventory_request);
     Html::redirect($redirect_url);
 } else {
+    if (isCommandLine()) {
+        exit(0);
+    }
     $headers = $inventory_request->getHeaders(true);
     http_response_code($inventory_request->getHttpResponseCode());
     foreach ($headers as $key => $value) {

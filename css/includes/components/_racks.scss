@@ -144,14 +144,12 @@ ul.indexes {
     position: relative;
 
     &::after {
-        content: "\f067";
+        content: "\2b";
         left: 45%;
-        font-size: 1em;
         color: grey;
         top: 1px;
-        font-family: "Font Awesome 5 Free";
+        font: 1em var(--fa-font-solid);
         position: absolute;
-        font-weight: 900;
     }
 
     &:hover {
@@ -180,7 +178,7 @@ ul.indexes {
     .racks_add {
         border: 1px solid $table-border-color;
         border-width: 0 1px 1px 0;
-        background-size: 40px 39px;
+        background-size: var(--dcroom-grid-cellw) var(--dcroom-grid-cellh);
         background-image:
             linear-gradient(
                 to right,
@@ -195,8 +193,8 @@ ul.indexes {
         margin-left: 15px;
 
         .cell_add {
-            height: 39px;
-            width: 40px;
+            height: var(--dcroom-grid-cellh);
+            width: var(--dcroom-grid-cellw);
             float: left;
 
             &::after {
@@ -278,7 +276,7 @@ ul.indexes {
 
             li {
                 float: left;
-                width: 40px;
+                width: var(--dcroom-grid-cellw);
             }
         }
 
@@ -286,9 +284,8 @@ ul.indexes {
             width: 15px;
 
             li {
-                width: 10px;
-                height: 39px;
-                line-height: 40px;
+                height: var(--dcroom-grid-cellh);
+                line-height: calc(var(--dcroom-grid-cellh) + 1px);
             }
         }
     }

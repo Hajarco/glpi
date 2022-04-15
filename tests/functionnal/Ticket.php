@@ -252,7 +252,7 @@ class Ticket extends DbTestCase
 
        // 6.1 -> check first task
         $taskA = array_shift($found_tasks);
-        $this->string($taskA['content'])->isIdenticalTo(Sanitizer::sanitize('<p>my task template A</p>', false));
+        $this->string($taskA['content'])->isIdenticalTo(Sanitizer::encodeHtmlSpecialChars('<p>my task template A</p>'));
         $this->variable($taskA['taskcategories_id'])->isEqualTo($taskcat_id);
         $this->variable($taskA['actiontime'])->isEqualTo(60);
         $this->variable($taskA['is_private'])->isEqualTo(1);
@@ -262,7 +262,7 @@ class Ticket extends DbTestCase
 
        // 6.2 -> check second task
         $taskB = array_shift($found_tasks);
-        $this->string($taskB['content'])->isIdenticalTo(Sanitizer::sanitize('<p>my task template B</p>', false));
+        $this->string($taskB['content'])->isIdenticalTo(Sanitizer::encodeHtmlSpecialChars('<p>my task template B</p>'));
         $this->variable($taskB['taskcategories_id'])->isEqualTo($taskcat_id);
         $this->variable($taskB['actiontime'])->isEqualTo(120);
         $this->variable($taskB['is_private'])->isEqualTo(0);
@@ -482,6 +482,7 @@ class Ticket extends DbTestCase
             (int)$ticket->add([
                 'name'    => '',
                 'content' => 'A ticket to check ACLS',
+                '_users_id_assign' => getItemByTypeName("User", 'tech', true),
             ])
         )->isGreaterThan(0);
 
@@ -597,6 +598,7 @@ class Ticket extends DbTestCase
             (int)$ticket->add([
                 'name'    => '',
                 'content' => 'Another ticket to check ACLS',
+                '_users_id_assign' => getItemByTypeName("User", 'tech', true),
             ])
         )->isGreaterThan(0);
         $this->boolean((bool)$ticket->getFromDB($ticket->getID()))->isTrue();
@@ -633,6 +635,7 @@ class Ticket extends DbTestCase
             (int)$ticket->add([
                 'name'    => '',
                 'content' => 'A ticket to check ACLS',
+                '_users_id_assign' => getItemByTypeName("User", TU_USER, true),
             ])
         )->isGreaterThan(0);
 
@@ -1065,8 +1068,6 @@ class Ticket extends DbTestCase
     {
         global $DB;
 
-        $this->dump("changeTechRight: $rights");
-
        // set new rights
         $DB->update(
             'glpi_profilerights',
@@ -1184,6 +1185,7 @@ class Ticket extends DbTestCase
             (int)$ticket->add([
                 'name'    => '',
                 'content' => 'A ticket to check assign ACLS',
+                '_users_id_assign' => getItemByTypeName("User", TU_USER, true),
             ])
         )->isGreaterThan(0);
 
@@ -3052,9 +3054,6 @@ class Ticket extends DbTestCase
 
     public function testKeepScreenshotsOnFormReload()
     {
-       //FIXME: temporary commented for other tests to work; must be fixed on modernui
-        return true;
-
        //login to get session
         $auth = new \Auth();
         $this->boolean($auth->login(TU_USER, TU_PASS, true))->isTrue();
@@ -3177,41 +3176,6 @@ class Ticket extends DbTestCase
             'items_id' => $instance->getID(),
         ]);
         $this->integer($count)->isEqualTo(2);
-    }
-
-    public function testKeepScreenshotFromTemplate()
-    {
-       //FIXME: temporary commented for other tests to work; must be fixed on modernui
-        return true;
-
-       //login to get session
-        $auth = new \Auth();
-        $this->boolean($auth->login(TU_USER, TU_PASS, true))->isTrue();
-
-       // create a template with a predeined description
-        $ticketTemplate = new \TicketTemplate();
-        $ticketTemplate->add([
-            'name' => $this->getUniqueString(),
-        ]);
-        $base64Image = base64_encode(file_get_contents(__DIR__ . '/../fixtures/uploads/foo.png'));
-        $content = '&lt;p&gt;&lt;img id="3e29dffe-0237ea21-5e57d2c8895d55.57735524"'
-        . ' src="data:image/png;base64,' . $base64Image . '" width="12" height="12" /&gt;&lt;/p&gt;';
-        $predefinedField = new \TicketTemplatePredefinedField();
-        $predefinedField->add([
-            'tickettemplates_id' => $ticketTemplate->getID(),
-            'num' => '21',
-            'value' => $content
-        ]);
-        $session_tpl_id_back = $_SESSION['glpiactiveprofile']['tickettemplates_id'];
-        $_SESSION['glpiactiveprofile']['tickettemplates_id'] = $ticketTemplate->getID();
-
-        $this->output(
-            function () use ($session_tpl_id_back) {
-                $instance = new \Ticket();
-                $instance->showForm('0');
-                $_SESSION['glpiactiveprofile']['tickettemplates_id'] = $session_tpl_id_back;
-            }
-        )->contains('src=&quot;data:image/png;base64,' . $base64Image . '&quot;');
     }
 
 
@@ -4369,5 +4333,127 @@ HTML
         $this->integer($ticket->countUsers(\CommonITILActor::ASSIGN))->isEqualTo(1);
         // Verify new requester was added
         $this->integer($ticket->countUsers(\CommonITILActor::REQUESTER))->isEqualTo(2);
+    }
+
+
+    public function testGetActorsForType()
+    {
+        $this->login();
+
+        $ticket = new \Ticket();
+        $ticket->getEmpty();
+
+        $tech_id = getItemByTypeName('User', 'tech', true);
+        $postonly_id = getItemByTypeName('User', 'post-only', true);
+
+        // ## 1st - test auto requester and assign feature
+        // ###############################################
+
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER))->hasSize(1);
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER))->hasSize(0);
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN))->hasSize(1);
+
+        // disable autoactor by parameter
+        $params = ['_skip_default_actor' => true];
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER, $params))->hasSize(0);
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER, $params))->hasSize(0);
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN, $params))->hasSize(0);
+
+        // disable autoactor in session
+        $_SESSION['glpiset_default_requester'] = false;
+        $_SESSION['glpiset_default_tech']      = false;
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER))->hasSize(0);
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER))->hasSize(0);
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN))->hasSize(0);
+
+        // ## 2nd - test load actors from templates (simulated)
+        // ####################################################
+        //reset session
+        $_SESSION['glpiset_default_requester'] = true;
+        $_SESSION['glpiset_default_tech']      = true;
+        //prepare params
+        $params = [
+            '_template_changed'  => true,
+            '_predefined_fields' => [
+                '_users_id_requester' => $postonly_id,
+                '_users_id_observer'  => $postonly_id,
+                '_users_id_assign'    => $tech_id,
+            ]
+        ];
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER, $params))->hasSize(2);
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER, $params))->hasSize(1);
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN, $params))->hasSize(2);
+
+        $_SESSION['glpiset_default_requester'] = false;
+        $_SESSION['glpiset_default_tech']      = false;
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER, $params))->hasSize(1)
+            ->integer[0]
+            ->integer['items_id']->isEqualTo($postonly_id);
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER, $params))->hasSize(1)
+            ->integer[0]
+            ->integer['items_id']->isEqualTo($postonly_id);
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN, $params))->hasSize(1)
+            ->integer[0]
+            ->integer['items_id']->isEqualTo($tech_id);
+
+        // apend groups
+        $params['_predefined_fields']['_groups_id_requester'] = [1];
+        $params['_predefined_fields']['_groups_id_observer'] = [1];
+        $params['_predefined_fields']['_groups_id_assign'] = [1];
+
+        $this->array($ticket->getActorsForType(\CommonITILActor::REQUESTER, $params))->hasSize(2)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
+        $this->array($ticket->getActorsForType(\CommonITILActor::OBSERVER, $params))->hasSize(2)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
+        $this->array($ticket->getActorsForType(\CommonITILActor::ASSIGN, $params))->hasSize(2)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
+
+        // ## 2nd - test load actors from _actors key (reload simulated)
+        // #############################################################
+        //reset session
+        $_SESSION['glpiset_default_requester'] = true;
+        $_SESSION['glpiset_default_tech']      = true;
+        //prepare params
+        $params = [
+            '_skip_default_actor' => true,
+            '_actors'             => [
+                'requester' => [
+                    ['itemtype' => 'User',  'items_id' => $postonly_id],
+                    ['itemtype' => 'Group', 'items_id' => 1]
+                ],
+                'observer'  => [
+                    ['itemtype' => 'User',  'items_id' => $postonly_id],
+                    ['itemtype' => 'Group', 'items_id' => 1]
+                ],
+                'assign'    => [
+                    ['itemtype' => 'User',  'items_id' => $tech_id],
+                    ['itemtype' => 'Group', 'items_id' => 1]
+                ],
+            ]
+        ];
+        $requesters = $ticket->getActorsForType(\CommonITILActor::REQUESTER, $params);
+        $this->array($requesters)->hasSize(2)
+            ->integer[0]
+            ->string['text']->isEqualTo("post-only");
+        $this->array($requesters)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
+        $observers = $ticket->getActorsForType(\CommonITILActor::OBSERVER, $params);
+        $this->array($observers)->hasSize(2)
+            ->integer[0]
+            ->string['text']->isEqualTo("post-only");
+        $this->array($observers)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
+        $assignees = $ticket->getActorsForType(\CommonITILActor::ASSIGN, $params);
+        $this->array($assignees)->hasSize(2)
+            ->integer[0]
+            ->string['text']->isEqualTo("tech");
+        $this->array($assignees)
+            ->integer[1]
+            ->string['text']->isEqualTo("_test_group_1");
     }
 }

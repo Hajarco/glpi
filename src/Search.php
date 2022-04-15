@@ -190,8 +190,8 @@ class Search
             ];
             $globallinkto = Toolbox::append_params(
                 [
-                    'criteria'     => Toolbox::stripslashes_deep($criteria),
-                    'metacriteria' => Toolbox::stripslashes_deep($data['search']['metacriteria'])
+                    'criteria'     => Sanitizer::unsanitize($criteria),
+                    'metacriteria' => Sanitizer::unsanitize($data['search']['metacriteria'])
                 ],
                 '&amp;'
             );
@@ -1204,8 +1204,8 @@ class Search
                 } else {
                     $tmplink = " AND ";
                 }
-               // Manage Link if not first item
-                if (!empty($sql)) {
+                // Manage Link if not first item
+                if (!empty($sql) && !$is_having) {
                     $sql .= $globallink;
                 }
                 $first2 = true;
@@ -1663,8 +1663,8 @@ class Search
 
        // Contruct parameters
         $globallinkto  = Toolbox::append_params([
-            'criteria'     => Toolbox::stripslashes_deep($search['criteria']),
-            'metacriteria' => Toolbox::stripslashes_deep($search['metacriteria'])
+            'criteria'     => Sanitizer::unsanitize($search['criteria']),
+            'metacriteria' => Sanitizer::unsanitize($search['metacriteria'])
         ], '&');
 
         $parameters = http_build_query([
@@ -2536,12 +2536,13 @@ class Search
         $idor_display_meta_criteria  = Session::getNewIDORToken($itemtype);
         $idor_display_criteria_group = Session::getNewIDORToken($itemtype);
 
+        $itemtype_escaped = addslashes($itemtype);
         $JS = <<<JAVASCRIPT
          $('#addsearchcriteria$rand_criteria').on('click', function(event) {
             event.preventDefault();
             $.post('{$CFG_GLPI['root_doc']}/ajax/search.php', {
                'action': 'display_criteria',
-               'itemtype': '$itemtype',
+               'itemtype': '$itemtype_escaped',
                'num': $nbsearchcountvar,
                'p': $json_p,
                '_idor_token': '$idor_display_criteria'
@@ -2556,7 +2557,7 @@ class Search
             event.preventDefault();
             $.post('{$CFG_GLPI['root_doc']}/ajax/search.php', {
                'action': 'display_meta_criteria',
-               'itemtype': '$itemtype',
+               'itemtype': '$itemtype_escaped',
                'meta': true,
                'num': $nbsearchcountvar,
                'p': $json_p,
@@ -2572,7 +2573,7 @@ class Search
             event.preventDefault();
             $.post('{$CFG_GLPI['root_doc']}/ajax/search.php', {
                'action': 'display_criteria_group',
-               'itemtype': '$itemtype',
+               'itemtype': '$itemtype_escaped',
                'meta': true,
                'num': $nbsearchcountvar,
                'p': $json_p,
@@ -2659,7 +2660,8 @@ JAVASCRIPT;
         $p           = $request['p'];
         $options     = self::getCleanedOptions($request["itemtype"]);
         $randrow     = mt_rand();
-        $rowid       = 'searchrow' . $request['itemtype'] . $randrow;
+        $normalized_itemtype = strtolower(str_replace('\\', '', $request["itemtype"]));
+        $rowid       = 'searchrow' . $normalized_itemtype . $randrow;
         $addclass    = $num == 0 ? ' headerRow' : '';
         $prefix      = isset($p['prefix_crit']) ? $p['prefix_crit'] : '';
         $parents_num = isset($p['parents_num']) ? $p['parents_num'] : [];
@@ -2792,7 +2794,7 @@ JAVASCRIPT;
         ]);
         echo "</div>";
         $field_id = Html::cleanId("dropdown_criteria{$prefix}[$num][field]$rand");
-        $spanid   = Html::cleanId('SearchSpan' . $request["itemtype"] . $prefix . $num);
+        $spanid   = Html::cleanId('SearchSpan' . $normalized_itemtype . $prefix . $num);
 
         echo "<div class='col-auto'>";
         echo "<div class='row g-1' id='$spanid'>";
@@ -2807,7 +2809,7 @@ JAVASCRIPT;
                      ? $criteria['searchtype']
                      : "";
         $p_value    = isset($criteria['value'])
-                     ? stripslashes($criteria['value'])
+                     ? Sanitizer::dbUnescape($criteria['value'])
                      : "";
 
         $params = [
@@ -3141,8 +3143,9 @@ JAVASCRIPT;
         }
 
         $rands = -1;
+        $normalized_itemtype = strtolower(str_replace('\\', '', $request["itemtype"]));
         $dropdownname = Html::cleanId("spansearchtype$fieldname" .
-                                    $request["itemtype"] .
+                                    $normalized_itemtype .
                                     $prefix .
                                     $num);
         $searchopt = [];
@@ -3165,7 +3168,7 @@ JAVASCRIPT;
 
         echo "<div class='col-auto' id='$dropdownname' data-itemtype='{$request["itemtype"]}' data-fieldname='$fieldname' data-prefix='$prefix' data-num='$num'>";
         $params = [
-            'value'       => rawurlencode(stripslashes($request['value'])),
+            'value'       => rawurlencode(Sanitizer::dbUnescape($request['value'])),
             'searchopt'   => $searchopt,
             'searchtype'  => $request["searchtype"],
             'num'         => $num,
@@ -3394,6 +3397,11 @@ JAVASCRIPT;
 
        // Preformat items
         if (isset($searchopt[$ID]["datatype"])) {
+            if ($searchopt[$ID]["datatype"] == "mio") {
+                // Parse value as it may contain a few different formats
+                $val = Toolbox::getMioSizeFromString($val);
+            }
+
             switch ($searchopt[$ID]["datatype"]) {
                 case "datetime":
                     if (in_array($searchtype, ['contains', 'notcontains'])) {
@@ -3426,6 +3434,7 @@ JAVASCRIPT;
                     return " {$LINK} ({$DB->quoteName($NAME)} $operator {$DB->quoteValue($val)}) ";
                 break;
                 case "count":
+                case "mio":
                 case "number":
                 case "decimal":
                 case "timestamp":
@@ -4522,17 +4531,17 @@ JAVASCRIPT;
 
             case "equals":
                 if ($nott) {
-                    $SEARCH = " <> '$val'";
+                    $SEARCH = " <> " . DBmysql::quoteValue($val);
                 } else {
-                    $SEARCH = " = '$val'";
+                    $SEARCH = " = " . DBmysql::quoteValue($val);
                 }
                 break;
 
             case "notequals":
                 if ($nott) {
-                    $SEARCH = " = '$val'";
+                    $SEARCH = " = " . DBmysql::quoteValue($val);
                 } else {
-                    $SEARCH = " <> '$val'";
+                    $SEARCH = " <> " . DBmysql::quoteValue($val);
                 }
                 break;
 
@@ -4900,6 +4909,11 @@ JAVASCRIPT;
 
        // Preformat items
         if (isset($searchopt[$ID]["datatype"])) {
+            if ($searchopt[$ID]["datatype"] == "mio") {
+                // Parse value as it may contain a few different formats
+                $val = Toolbox::getMioSizeFromString($val);
+            }
+
             switch ($searchopt[$ID]["datatype"]) {
                 case "itemtypename":
                     if (in_array($searchtype, ['equals', 'notequals'])) {
@@ -5013,6 +5027,7 @@ JAVASCRIPT;
                    // No break here : use number comparaison case
 
                 case "count":
+                case "mio":
                 case "number":
                 case "decimal":
                 case "timestamp":
@@ -6399,7 +6414,7 @@ JAVASCRIPT;
                             }
                         }
                         return $out;
-                    } else if (($so["datatype"] ?? "") != "itemlink") {
+                    } else if (($so["datatype"] ?? "") != "itemlink" && !empty($data[$ID][0]['name'])) {
                         return Entity::badgeCompletename($data[$ID][0]['name']);
                     }
                     break;
@@ -6425,6 +6440,11 @@ JAVASCRIPT;
                         $linkid = ($data[$ID][$k]['tickets_id_2'] == $data['id'])
                                  ? $data[$ID][$k]['name']
                                  : $data[$ID][$k]['tickets_id_2'];
+
+                        // If link ID is int or integer string, force conversion to int. Coversion to int and then string to compare is needed to ensure it isn't a decimal
+                        if (is_numeric($linkid) && ((string)(int)$linkid === (string)$linkid)) {
+                            $linkid = (int) $linkid;
+                        }
                         if ((is_int($linkid) && $linkid > 0) && !isset($displayed[$linkid])) {
                              $text  = "<a ";
                              $text .= "href=\"" . Ticket::getFormURLWithID($linkid) . "\">";
@@ -7142,6 +7162,7 @@ JAVASCRIPT;
 
                 case "count":
                 case "number":
+                case "mio":
                     $out           = "";
                     $count_display = 0;
                     for ($k = 0; $k < $data[$ID]['count']; $k++) {
@@ -7939,6 +7960,7 @@ HTML;
 
             if (isset($searchopt[$field_num]['datatype'])) {
                 switch ($searchopt[$field_num]['datatype']) {
+                    case 'mio':
                     case 'count':
                     case 'number':
                         $opt = [
@@ -8124,7 +8146,7 @@ HTML;
             case self::PDF_OUTPUT_LANDSCAPE: //pdf
             case self::PDF_OUTPUT_PORTRAIT:
                 global $PDF_TABLE;
-                $value = DataExport::normalizeValueForTextExport($value);
+                $value = DataExport::normalizeValueForTextExport($value ?? '');
                 $value = htmlspecialchars($value);
                 $value = preg_replace('/' . self::LBBR . '/', '<br>', $value);
                 $value = preg_replace('/' . self::LBHR . '/', '<hr>', $value);
@@ -8628,7 +8650,7 @@ HTML;
     {
 
         $value = preg_replace('/\x0A/', ' ', $value);
-        $value = preg_replace('/\x0D/', null, $value);
+        $value = preg_replace('/\x0D/', '', $value);
         $value = str_replace("\"", "''", $value);
         $value = str_replace("\n", " | ", $value);
 
@@ -8737,7 +8759,7 @@ HTML;
         if ($val == null) {
             $SEARCH = " IS $NOT NULL ";
         } else {
-            $SEARCH = " $NOT LIKE '$val' ";
+            $SEARCH = " $NOT LIKE " . DBmysql::quoteValue($val) . " ";
         }
         return $SEARCH;
     }

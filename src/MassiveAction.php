@@ -50,6 +50,126 @@ class MassiveAction
     const ACTION_KO               = 2;
     const ACTION_NORIGHT          = 3;
 
+    /**
+     * Massive actions input.
+     * @var array
+     */
+    public $POST = [];
+
+    /**
+     * Results of process.
+     * @var array
+     */
+    public $results = [];
+
+    /**
+     * Current action key.
+     * @var string|null
+     */
+    private $action;
+
+    /**
+     * Current action name.
+     * @var string|null
+     */
+    private $action_name;
+
+    /**
+     * Class used to process current action.
+     * @var string
+     */
+    private $processor;
+
+    /**
+     * Items to process.
+     * @var array
+     */
+    private $items = [];
+
+    /**
+     * Current process identifier.
+     * @var int|null
+     */
+    private $identifier;
+
+    /**
+     * Total count of items in current process.
+     * @var int
+     */
+    private $nb_items = 0;
+
+    /**
+     * Count of done items in current process.
+     * @var int
+     */
+    private $nb_done = 0;
+
+    /**
+     * Items done in current process.
+     * @var array
+     */
+    private $done = [];
+
+    /**
+     * Items remaining in current process.
+     * @var array
+     */
+    private $remainings = [];
+
+    /**
+     * Fields to remove after reload.
+     * @var array
+     */
+    private $fields_to_remove_when_reload = [];
+
+    /**
+     * Computed timeout delay.
+     * @var int
+     */
+    private $timeout_delay;
+
+    /**
+     * Current process timer.
+     * @var int
+     */
+    private $timer;
+
+    /**
+     * Item used to check rights.
+     * Variable is used for caching purpose.
+     * @var CommonGLPI|null
+     */
+    private $check_item;
+
+    /**
+     * Redirect URL used after actions are processed.
+     * @var string
+     */
+    private $redirect;
+
+    /**
+     * Indicates whether progress bar has to be displayed.
+     * @var bool
+     */
+    private $display_progress_bars;
+
+    /**
+     * Indicates whether progress bar is currently displayed.
+     * @var bool
+     */
+    private $progress_bar_displayed;
+
+    /**
+     * Buffer that stores messages to display after redirect.
+     * @var null|array
+     */
+    private $message_after_redirect;
+
+    /**
+     * Itemtype currently processed.
+     * @var string
+     */
+    private $current_itemtype;
 
     /**
      * Constructor of massive actions.
@@ -73,8 +193,6 @@ class MassiveAction
             if (!isset($POST['is_deleted'])) {
                 $POST['is_deleted'] = 0;
             }
-
-            $this->nb_items = 0;
 
             if ((isset($POST['item'])) || (isset($POST['items']))) {
                 $remove_from_post = [];
@@ -243,11 +361,17 @@ class MassiveAction
                 }
 
                 $this->POST = $POST;
-                foreach (['items', 'action', 'processor'] as $field) {
-                    if (isset($this->POST[$field])) {
-                        $this->$field = $this->POST[$field];
-                    }
+
+                if (isset($this->POST['items']) && is_array($this->POST['items'])) {
+                    $this->items = $this->POST['items'];
                 }
+                if (isset($this->POST['action'])) {
+                    $this->action = $this->POST['action'];
+                }
+                if (isset($this->POST['processor'])) {
+                    $this->processor = $this->POST['processor'];
+                }
+
                 foreach ($remove_from_post as $field) {
                     if (isset($this->POST[$field])) {
                         unset($this->POST[$field]);
@@ -269,7 +393,7 @@ class MassiveAction
                 $this->$attribute = $value;
             }
             if ($this->identifier != $identifier) {
-                $this->error = __('Invalid process');
+                throw new \Exception(__('Invalid process'));
                 return;
             }
             unset($_SESSION['current_massive_action'][$identifier]);
@@ -277,9 +401,7 @@ class MassiveAction
 
        // Add process elements
         if ($stage == 'process') {
-            if (!isset($this->remainings)) {
-                $this->remainings = $this->items;
-            }
+            $this->remainings = $this->items;
 
             $this->fields_to_remove_when_reload = ['fields_to_remove_when_reload'];
 
@@ -300,6 +422,89 @@ class MassiveAction
         }
     }
 
+    public function __get(string $property)
+    {
+        // TODO Deprecate access to variables in GLPI 10.1.
+        $value = null;
+        switch ($property) {
+            case 'action':
+                $value = $this->getAction();
+                break;
+            case 'action_name':
+                $value = $this->getActionName();
+                break;
+            case 'processor':
+                $value = $this->getProcessor();
+                break;
+            case 'items':
+                $value = $this->getItems();
+                break;
+            case 'check_item':
+            case 'current_itemtype':
+            case 'display_progress_bars':
+            case 'done':
+            case 'fields_to_remove_when_reload':
+            case 'identifier':
+            case 'message_after_redirect':
+            case 'nb_done':
+            case 'nb_items':
+            case 'progress_bar_displayed':
+            case 'redirect':
+            case 'remainings':
+            case 'timeout_delay':
+            case 'timer':
+                Toolbox::deprecated(sprintf('Reading private property %s::%s is deprecated', __CLASS__, $property));
+                $value = $this->$property;
+                break;
+            default:
+                $trace = debug_backtrace();
+                trigger_error(
+                    sprintf('Undefined property: %s::%s in %s on line %d', __CLASS__, $property, $trace[0]['file'], $trace[0]['line']),
+                    E_USER_WARNING
+                );
+                break;
+        }
+        return $value;
+    }
+
+    public function __set(string $property, $value)
+    {
+        // TODO Deprecate access to variables in GLPI 10.1.
+        $value = null;
+        switch ($property) {
+            case 'display_progress_bars':
+                $this->$property = $value;
+                break;
+            case 'action':
+            case 'action_name':
+            case 'check_item':
+            case 'current_itemtype':
+            case 'done':
+            case 'fields_to_remove_when_reload':
+            case 'identifier':
+            case 'items':
+            case 'message_after_redirect':
+            case 'nb_done':
+            case 'nb_items':
+            case 'processor':
+            case 'progress_bar_displayed':
+            case 'redirect':
+            case 'remainings':
+            case 'timeout_delay':
+            case 'timer':
+                Toolbox::deprecated(sprintf('Writing private property %s::%s is deprecated', __CLASS__, $property));
+                $this->$property = $value;
+                break;
+            default:
+                $trace = debug_backtrace();
+                trigger_error(
+                    sprintf('Undefined property: %s::%s in %s on line %d', __CLASS__, $property, $trace[0]['file'], $trace[0]['line']),
+                    E_USER_WARNING
+                );
+                break;
+        }
+    }
+
 
     /**
      * Get the fields provided by previous stage through $_POST.
@@ -309,11 +514,7 @@ class MassiveAction
      **/
     public function getInput()
     {
-
-        if (isset($this->POST)) {
-            return $this->POST;
-        }
-        return [];
+        return $this->POST;
     }
 
 
@@ -324,11 +525,27 @@ class MassiveAction
      **/
     public function getAction()
     {
+        return $this->action;
+    }
 
-        if (isset($this->action)) {
-            return $this->action;
-        }
-        return null;
+    /**
+     * Get current action name.
+     *
+     * @return
+     */
+    public function getActionName(): ?string
+    {
+        return $this->action_name;
+    }
+
+    /**
+     * Get current action processor classname.
+     *
+     * @return
+     */
+    public function getProcessor(): ?string
+    {
+        return $this->processor;
     }
 
 
@@ -339,11 +556,7 @@ class MassiveAction
      **/
     public function getItems()
     {
-
-        if (isset($this->items)) {
-            return $this->items;
-        }
-        return [];
+        return $this->items;
     }
 
 
@@ -354,11 +567,7 @@ class MassiveAction
      **/
     public function getRemainings()
     {
-
-        if (isset($this->remainings)) {
-            return $this->remainings;
-        }
-        return [];
+        return $this->remainings;
     }
 
 
@@ -369,7 +578,7 @@ class MassiveAction
     public function __destruct()
     {
 
-        if (isset($this->identifier)) {
+        if ($this->identifier !== null) {
            // $this->identifier is unset by self::process() when the massive actions are finished
             foreach ($this->fields_to_remove_when_reload as $field) {
                 unset($this->$field);
@@ -385,20 +594,16 @@ class MassiveAction
     public function getCheckItem($POST)
     {
 
-        if (!isset($this->check_item)) {
-            if (isset($POST['check_itemtype'])) {
-                if (!($this->check_item = getItemForItemtype($POST['check_itemtype']))) {
+        if ($this->check_item === null && isset($POST['check_itemtype'])) {
+            if (!($this->check_item = getItemForItemtype($POST['check_itemtype']))) {
+                exit();
+            }
+            if (isset($POST['check_items_id'])) {
+                if (!$this->check_item->getFromDB($POST['check_items_id'])) {
                     exit();
+                } else {
+                    $this->check_item->getEmpty();
                 }
-                if (isset($POST['check_items_id'])) {
-                    if (!$this->check_item->getFromDB($POST['check_items_id'])) {
-                        exit();
-                    } else {
-                        $this->check_item->getEmpty();
-                    }
-                }
-            } else {
-                $this->check_item = null;
             }
         }
         return $this->check_item;
@@ -412,24 +617,19 @@ class MassiveAction
      **/
     public function addHiddenFields()
     {
+        $common_fields = ['action', 'processor', 'is_deleted', 'initial_items',
+            'item_itemtype', 'item_items_id', 'items', 'action_name'
+        ];
 
-        if (empty($this->hidden_fields_defined)) {
-            $this->hidden_fields_defined = true;
+        if (!empty($this->POST['massive_action_fields'])) {
+            $common_fields = array_merge($common_fields, $this->POST['massive_action_fields']);
+        }
 
-            $common_fields = ['action', 'processor', 'is_deleted', 'initial_items',
-                'item_itemtype', 'item_items_id', 'items', 'action_name'
-            ];
-
-            if (!empty($this->POST['massive_action_fields'])) {
-                $common_fields = array_merge($common_fields, $this->POST['massive_action_fields']);
-            }
-
-            foreach ($common_fields as $field) {
-                if (isset($this->POST[$field])) {
-                    // Value will be sanitized again when massive action form will be submitted.
-                    // It have to be unsanitized here to prevent double sanitization.
-                    echo Html::hidden($field, ['value' => Sanitizer::unsanitize($this->POST[$field])]);
-                }
+        foreach ($common_fields as $field) {
+            if (isset($this->POST[$field])) {
+                // Value will be sanitized again when massive action form will be submitted.
+                // It have to be unsanitized here to prevent double sanitization.
+                echo Html::hidden($field, ['value' => Sanitizer::unsanitize($this->POST[$field])]);
             }
         }
     }
@@ -448,38 +648,37 @@ class MassiveAction
     public function getItemtype($display_selector)
     {
 
-        if (isset($this->items) && is_array($this->items)) {
-            $keys = array_keys($this->items);
-            if (count($keys) == 1) {
-                return $keys[0];
-            }
-
-            if (
-                $display_selector
-                && (count($keys) > 1)
-            ) {
-                $itemtypes = [-1 => Dropdown::EMPTY_VALUE];
-                foreach ($keys as $itemtype) {
-                    $itemtypes[$itemtype] = $itemtype::getTypeName(Session::getPluralNumber());
-                }
-                echo __('Select the type of the item on which applying this action') . "<br>\n";
-
-                $rand = Dropdown::showFromArray('specialize_itemtype', $itemtypes);
-                echo "<br><br>";
-
-                $params                        = $this->POST;
-                $params['specialize_itemtype'] = '__VALUE__';
-                Ajax::updateItemOnSelectEvent(
-                    "dropdown_specialize_itemtype$rand",
-                    "show_itemtype$rand",
-                    $_SERVER['REQUEST_URI'],
-                    $params
-                );
-
-                echo "<span id='show_itemtype$rand'>&nbsp;</span>\n";
-                exit();
-            }
+        $keys = array_keys($this->items);
+        if (count($keys) == 1) {
+            return $keys[0];
         }
+
+        if (
+            $display_selector
+            && (count($keys) > 1)
+        ) {
+            $itemtypes = [-1 => Dropdown::EMPTY_VALUE];
+            foreach ($keys as $itemtype) {
+                $itemtypes[$itemtype] = $itemtype::getTypeName(Session::getPluralNumber());
+            }
+            echo __('Select the type of the item on which applying this action') . "<br>\n";
+
+            $rand = Dropdown::showFromArray('specialize_itemtype', $itemtypes);
+            echo "<br><br>";
+
+            $params                        = $this->POST;
+            $params['specialize_itemtype'] = '__VALUE__';
+            Ajax::updateItemOnSelectEvent(
+                "dropdown_specialize_itemtype$rand",
+                "show_itemtype$rand",
+                $_SERVER['REQUEST_URI'],
+                $params
+            );
+
+            echo "<span id='show_itemtype$rand'>&nbsp;</span>\n";
+            exit();
+        }
+
         return false;
     }
 
@@ -925,52 +1124,51 @@ class MassiveAction
                     $search_options = [];
                 }
 
-                $items         = [];
+                // TODO: ensure that all items are equivalent ...
+                $item   = null;
+                $search = null;
                 foreach ($search_options as $search_option) {
                     $search_option = explode(':', $search_option);
-                    $itemtype      = $search_option[0];
-                    $index         = $search_option[1];
+                    $so_itemtype   = $search_option[0];
+                    $so_index      = $search_option[1];
 
-                    if (!$item = getItemForItemtype($itemtype)) {
+                    if (!$so_item = getItemForItemtype($so_itemtype)) {
                         continue;
                     }
 
-                    if (Infocom::canApplyOn($itemtype)) {
-                        Session::checkSeveralRightsOr([$itemtype  => UPDATE,
+                    if (Infocom::canApplyOn($so_itemtype)) {
+                        Session::checkSeveralRightsOr([$so_itemtype  => UPDATE,
                             "infocom"  => UPDATE
                         ]);
                     } else {
-                        $item->checkGlobal(UPDATE);
+                        $so_item->checkGlobal(UPDATE);
                     }
 
-                    $search = Search::getOptions($itemtype);
-                    if (!isset($search[$index])) {
-                         exit();
+                    $itemtype_search_options = Search::getOptions($so_itemtype);
+                    if (!isset($itemtype_search_options[$so_index])) {
+                        exit();
                     }
-                    $item->search = $search[$index];
 
-                    $items[] = $item;
+                    $item   = $so_item;
+                    $search = $itemtype_search_options[$so_index];
+                    break; // No need to process all items a corresponding item/searchoption has been found
                 }
 
-                if (count($items) == 0) {
+                if ($item === null) {
                     exit();
                 }
-
-                // TODO: ensure that all items are equivalent ...
-                $item   = $items[0];
-                $search = $item->search;
 
                 $plugdisplay = false;
                 if (
                     ($plug = isPluginItemType($item->getType()))
                     // Specific for plugin which add link to core object
-                    || ($plug = isPluginItemType(getItemTypeForTable($item->search['table'])))
+                    || ($plug = isPluginItemType(getItemTypeForTable($search['table'])))
                 ) {
                     $plugdisplay = Plugin::doOneHook(
                         $plug['plugin'],
                         'MassiveActionsFieldsDisplay',
                         ['itemtype' => $item->getType(),
-                            'options'  => $item->search
+                            'options'  => $search
                         ]
                     );
                 }
@@ -990,6 +1188,22 @@ class MassiveAction
                    // For ticket template or aditional options of massive actions
                     if (isset($ma->POST['options'])) {
                         $options = $ma->POST['options'];
+                    }
+                    switch ($item->getType()) {
+                        case 'Change':
+                            $search['condition'][] = 'is_change';
+                            break;
+                        case 'Problem':
+                            $search['condition'][] = 'is_problem';
+                            break;
+                        case 'Ticket':
+                            $search['condition'][] = [
+                                'OR' => [
+                                    'is_incident',
+                                    'is_request'
+                                ]
+                            ];
+                            break;
                     }
                     if (isset($ma->POST['additionalvalues'])) {
                         $values = $ma->POST['additionalvalues'];
@@ -1109,7 +1323,7 @@ class MassiveAction
         }
 
         if ($this->display_progress_bars) {
-            if (!isset($this->progress_bar_displayed)) {
+            if ($this->progress_bar_displayed !== true) {
                 Html::progressBar('main_' . $this->identifier, ['create'  => true,
                     'message' => $this->action_name
                 ]);
@@ -1121,7 +1335,7 @@ class MassiveAction
             }
             $percent = 100 * $this->nb_done / $this->nb_items;
             Html::progressBar('main_' . $this->identifier, ['percent' => $percent]);
-            if ((count($this->items) > 1) && isset($this->current_itemtype)) {
+            if ((count($this->items) > 1) && $this->current_itemtype !== null) {
                 $itemtype = $this->current_itemtype;
                 if (isset($this->items[$itemtype])) {
                     if (isset($this->done[$itemtype])) {
@@ -1154,10 +1368,10 @@ class MassiveAction
         if (!empty($this->remainings)) {
             $this->updateProgressBars();
 
-            if (isset($this->message_after_redirect) && !empty($this->message_after_redirect)) {
+            if (!empty($this->message_after_redirect)) {
                 $_SESSION["MESSAGE_AFTER_REDIRECT"] = $this->message_after_redirect;
                 Html::displayMessageAfterRedirect();
-                unset($this->message_after_redirect);
+                $this->message_after_redirect = null;
             }
 
             $processor = $this->processor;
@@ -1168,7 +1382,7 @@ class MassiveAction
         $this->results['redirect'] = $this->redirect;
 
        // unset $this->identifier to ensure the action won't register in $_SESSION
-        unset($this->identifier);
+        $this->identifier = null;
 
         return $this->results;
     }

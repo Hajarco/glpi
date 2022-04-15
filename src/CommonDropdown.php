@@ -362,6 +362,8 @@ abstract class CommonDropdown extends CommonDBTM
             'params' => $options,
             'additional_fields' => $fields
         ]);
+
+        return true;
     }
 
 
@@ -617,7 +619,6 @@ abstract class CommonDropdown extends CommonDBTM
                     'value'  => $this->fields[$fk],
                     'entity' => $this->getEntityID(),
                     'used'   => getSonsOf($this->getTable(), $ID),
-                    'width'   => '100%'
                 ]
             );
         } else {
@@ -775,6 +776,9 @@ abstract class CommonDropdown extends CommonDBTM
                 $input["name"] = $res_rule["name"];
             }
         }
+        // Merge extra input fields into $input
+        $input += $external_params;
+
         return ($add ? $this->import($input) : $this->findID($input));
     }
 

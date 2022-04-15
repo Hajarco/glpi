@@ -37,6 +37,7 @@ use DOMDocument;
 use DOMElement;
 use Glpi\Agent\Communication\Headers\Common;
 use Glpi\Application\ErrorHandler;
+use Toolbox;
 
 /**
  * Handle agent requests
@@ -144,15 +145,15 @@ abstract class AbstractRequest
     /**
      * Guess import mode
      *
-     * @return boolean
+     * @return void
      */
-    private function guessMode($contents)
+    private function guessMode($contents): void
     {
-       // In the case handleContentType() didn't set mode, just check $contents first char
+        // In the case handleContentType() didn't set mode, just check $contents first char
         if ($contents[0] === '{') {
             $this->setMode(self::JSON_MODE);
         } else {
-           //defaults to XML; whose validity is checked later.
+            //defaults to XML; whose validity is checked later.
             $this->setMode(self::XML_MODE);
         }
     }
@@ -188,6 +189,21 @@ abstract class AbstractRequest
      */
     public function handleRequest($data): bool
     {
+        // Some network inventories may request may contains lots of information.
+        // e.g. a Huawei S5720-52X-LI-AC inventory file may weigh 20MB,
+        // and GLPI will consume about 500MB of memory to handle it,
+        // and may take up to 2 minutes on server that has low performances.
+        //
+        // Setting limits to 1GB / 5 minutes should permit to handle any inventories request.
+        $memory_limit       = (int)Toolbox::getMemoryLimit();
+        $max_execution_time = ini_get('max_execution_time');
+        if ($memory_limit > 0 && $memory_limit < (1024 * 1024 * 1024)) {
+            ini_set('memory_limit', '1024M');
+        }
+        if ($max_execution_time > 0 && $max_execution_time < 300) {
+            ini_set('max_execution_time', '300');
+        }
+
         if ($this->compression !== self::COMPRESS_NONE) {
             switch ($this->compression) {
                 case self::COMPRESS_ZLIB:
@@ -218,6 +234,8 @@ abstract class AbstractRequest
             case self::JSON_MODE:
                 return $this->handleJSONRequest($data);
         }
+
+        return false;
     }
 
     /**
@@ -269,7 +287,7 @@ abstract class AbstractRequest
             return false;
         }
         $this->deviceid = (string)$xml->DEVICEID;
-       //query is not mandatory. Defaults to inventory
+        //query is not mandatory. Defaults to inventory
         $action = self::INVENT_QUERY;
         if (property_exists($xml, 'QUERY')) {
             $action = strtolower((string)$xml->QUERY);
@@ -294,7 +312,7 @@ abstract class AbstractRequest
             return false;
         }
 
-        $this->deviceid = $jdata->deviceid;
+        $this->deviceid = $jdata->deviceid ?? null;
         $action = self::INVENT_ACTION;
         if (property_exists($jdata, 'action')) {
             $action = $jdata->action;
@@ -302,7 +320,7 @@ abstract class AbstractRequest
             $action = $jdata->query;
         }
 
-        return $this->handleAction($action, $data);
+        return $this->handleAction($action, $jdata);
     }
 
     /**
@@ -333,11 +351,11 @@ abstract class AbstractRequest
             if ($this->mode === self::JSON_MODE) {
                 $this->addToResponse([
                     'status' => 'error',
-                    'message' => $message,
+                    'message' => \Html::resume_text($message, 250),
                     'expiration' => self::DEFAULT_FREQUENCY
                 ]);
             } else {
-                $this->addToResponse(['ERROR' => $message]);
+                $this->addToResponse(['ERROR' => \Html::resume_text($message, 250)]);
             }
         }
     }

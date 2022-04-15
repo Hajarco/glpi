@@ -1767,6 +1767,7 @@ class User extends CommonDBTM
            // force authtype as we retrieve this user by ldap (we could have login with SSO)
             $this->fields["authtype"] = Auth::LDAP;
 
+            $import_fields = [];
             foreach ($fields as $k => $e) {
                 $val = AuthLDAP::getFieldValue(
                     [$e => self::getLdapFieldValue($e, $v)],
@@ -1815,29 +1816,10 @@ class User extends CommonDBTM
                             break;
 
                         case "usertitles_id":
-                            $this->fields[$k] = Dropdown::importExternal('UserTitle', $val);
-                            break;
-
                         case 'locations_id':
-                           // use import to build the location tree
-                            $this->fields[$k] = Dropdown::import(
-                                'Location',
-                                ['completename' => $val,
-                                    'entities_id'  => 0,
-                                    'is_recursive' => 1
-                                ]
-                            );
-                            break;
-
                         case "usercategories_id":
-                            $this->fields[$k] = Dropdown::importExternal('UserCategory', $val);
-                            break;
-
                         case 'users_id_supervisor':
-                            $supervisor_id = self::getIdByField('user_dn', $val, false);
-                            if ($supervisor_id) {
-                                $this->fields[$k] = $supervisor_id;
-                            }
+                            $import_fields[$k] = $val;
                             break;
 
                         default:
@@ -1936,6 +1918,33 @@ class User extends CommonDBTM
                     }
                 }
 
+                foreach ($import_fields as $k => $val) {
+                    switch ($k) {
+                        case "usertitles_id":
+                            $this->fields[$k] = Dropdown::importExternal('UserTitle', $val);
+                            break;
+                        case 'locations_id':
+                            // use import to build the location tree
+                            $this->fields[$k] = Dropdown::import(
+                                'Location',
+                                ['completename' => $val,
+                                    'entities_id'  => 0,
+                                    'is_recursive' => 1
+                                ]
+                            );
+                            break;
+                        case "usercategories_id":
+                            $this->fields[$k] = Dropdown::importExternal('UserCategory', $val);
+                            break;
+                        case 'users_id_supervisor':
+                            $supervisor_id = self::getIdByField('user_dn', $val, false);
+                            if ($supervisor_id) {
+                                $this->fields[$k] = $supervisor_id;
+                            }
+                            break;
+                    }
+                }
+
                // Add ldap result to data send to the hook
                 $this->fields['_ldap_result'] = $v;
                 $this->fields['_ldap_conn']   = $ldap_connection;
@@ -1943,6 +1952,7 @@ class User extends CommonDBTM
                 $this->fields = Plugin::doHookFunction(Hooks::RETRIEVE_MORE_DATA_FROM_LDAP, $this->fields);
                 unset($this->fields['_ldap_result']);
             }
+
             return true;
         }
         return false;
@@ -2298,7 +2308,7 @@ class User extends CommonDBTM
             $vcard_url = User::getFormURLWithID($ID) . "&amp;getvcard=1";
             $vcard_btn = <<<HTML
             <a href="{$vcard_url}" target="_blank"
-                     class="btn btn-sm btn-ghost-secondary"
+                     class="btn btn-icon btn-sm btn-ghost-secondary"
                      title="{$vcard_lbl}"
                      data-bs-toggle="tooltip" data-bs-placement="bottom">
                <i class="far fa-address-card fa-lg"></i>
@@ -2310,7 +2320,7 @@ HTML;
                 $impersonate_lbl = __s('Impersonate');
                 $impersonate_btn = <<<HTML
                <button type="button" name="impersonate" value="1"
-                       class="btn btn-sm btn-ghost-secondary btn-impersonate"
+                       class="btn btn-icon btn-sm btn-ghost-secondary btn-impersonate"
                        title="{$impersonate_lbl}"
                        data-bs-toggle="tooltip" data-bs-placement="bottom">
                   <i class="fas fa-user-secret fa-lg"></i>
@@ -3916,6 +3926,8 @@ JAVASCRIPT;
     ) {
         global $DB;
 
+
+
        // No entity define : use active ones
         if ($entity_restrict < 0) {
             $entity_restrict = $_SESSION["glpiactiveentities"];
@@ -4170,6 +4182,14 @@ JAVASCRIPT;
             ];
         }
 
+        // remove helpdesk user
+        $config = Config::getConfigurationValues('core');
+        $WHERE[] = [
+            'NOT' => [
+                'glpi_users.id' => $config['system_user']
+            ]
+        ];
+
         $criteria = [
             'FROM'            => 'glpi_users',
             'LEFT JOIN'       => [
@@ -4381,7 +4401,7 @@ JAVASCRIPT;
         }
 
         if ($p['readonly']) {
-            return $user["name"];
+            return '<span class="form-control" readonly>' . $user["name"] . '</span>';
         }
 
         $view_users = self::canView();

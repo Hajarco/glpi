@@ -142,6 +142,8 @@ class ITILSolution extends CommonDBChild
             'subitem' => $this,
             'params'  => $options,
         ]);
+
+        return true;
     }
 
     /**
@@ -167,7 +169,7 @@ class ITILSolution extends CommonDBChild
 
     public function prepareInputForAdd($input)
     {
-        if (!isset($input['users_id']) && !(Session::isCron() || strpos($_SERVER['REQUEST_URI'], 'crontask.form.php') !== false)) {
+        if (!isset($input['users_id']) && !(Session::isCron() || strpos($_SERVER['REQUEST_URI'] ?? '', 'crontask.form.php') !== false)) {
             $input['users_id'] = Session::getLoginUserID();
         }
 

@@ -37,6 +37,7 @@ use Glpi\ContentTemplates\ParametersPreset;
 use Glpi\ContentTemplates\TemplateManager;
 use Glpi\Event;
 use Glpi\RichText\RichText;
+use Glpi\Toolbox\Sanitizer;
 
 /**
  * Ticket Class
@@ -295,6 +296,25 @@ class Ticket extends CommonITILObject
                     case 'status':
                         if (!self::isAllowedStatus($this->fields['status'], $value)) {
                             return false;
+                        }
+                        break;
+                    case 'itilcategories_id':
+                        $cat = new ITILCategory();
+                        if ($cat->getFromDB($value)) {
+                            switch ($this->fields['type']) {
+                                case self::INCIDENT_TYPE:
+                                    if (!$cat->fields['is_incident']) {
+                                        return false;
+                                    }
+                                    break;
+                                case self::DEMAND_TYPE:
+                                    if (!$cat->fields['is_request']) {
+                                        return false;
+                                    }
+                                    break;
+                                default:
+                                    break;
+                            }
                         }
                         break;
                 }
@@ -1798,18 +1818,6 @@ class Ticket extends CommonITILObject
             if (isset($input[$olaField]) && ($input[$olaField] > 0)) {
                 $manual_olas_id[$slmType] = $input[$olaField];
             }
-        }
-
-       // fill auto-assign when no tech defined (only for tech)
-        if (
-            !isset($input['_auto_import'])
-            && (!isset($input['_skip_auto_assign']) || $input['_skip_auto_assign'] === false)
-            && isset($_SESSION['glpiset_default_tech']) && $_SESSION['glpiset_default_tech']
-            && Session::getCurrentInterface() == 'central'
-            && (!isset($input['_users_id_assign']) || $input['_users_id_assign'] == 0)
-            && Session::haveRight("ticket", Ticket::OWN)
-        ) {
-            $input['_users_id_assign'] = Session::getLoginUserID();
         }
 
         $cat_id = $input['itilcategories_id'] ?? 0;
@@ -4049,67 +4057,6 @@ JAVASCRIPT;
         return $totalcost;
     }
 
-    /**
-     * Return an array of predefined fields while also loading them into the $options array
-     *
-     * @param ITILTemplate $tt The ticket template to use
-     * @param array $options The current options array (PASSED BY REFERENCE)
-     * @param array $default_values The default values to use in case they are not predefined
-     * @return array An array of the predefined values
-     */
-    private function getPredefinedTemplateFields(ITILTemplate $tt, array &$options, array $default_values): array
-    {
-        // Predefined fields from template : reset them
-        if (isset($options['_predefined_fields'])) {
-            $options['_predefined_fields']
-                = Toolbox::decodeArrayFromInput($options['_predefined_fields']);
-        } else {
-            $options['_predefined_fields'] = [];
-        }
-        if (!isset($options['_hidden_fields'])) {
-            $options['_hidden_fields'] = [];
-        }
-
-        // Store predefined fields to be able not to take into account on change template
-        $predefined_fields = [];
-        $key = self::getTemplateFormFieldName();
-
-        if (isset($tt->predefined) && count($tt->predefined)) {
-            foreach ($tt->predefined as $predeffield => $predefvalue) {
-                if (isset($options[$predeffield]) && isset($default_values[$predeffield])) {
-                    // Is always default value : not set
-                    // Set if already predefined field
-                    // Set if ticket template change
-                    if (
-                        ((count($options['_predefined_fields']) == 0)
-                            && ($options[$predeffield] == $default_values[$predeffield]))
-                        || (isset($options['_predefined_fields'][$predeffield])
-                            && ($options[$predeffield] == $options['_predefined_fields'][$predeffield]))
-                        || (isset($options[$key])
-                            && ($options[$key] != $tt->getID()))
-                    ) {
-                        $options[$predeffield]            = $predefvalue;
-                        $predefined_fields[$predeffield] = $predefvalue;
-                    }
-                } else { // Not defined options set as hidden field
-                    $options['_hidden_fields'][$predeffield] = $predefvalue;
-                }
-            }
-            // All predefined override : add option to say predifined exists
-            if (count($predefined_fields) == 0) {
-                $predefined_fields['_all_predefined_override'] = 1;
-            }
-        } else { // No template load : reset predefined values
-            if (count($options['_predefined_fields'])) {
-                foreach ($options['_predefined_fields'] as $predeffield => $predefvalue) {
-                    if ($options[$predeffield] == $predefvalue) {
-                        $options[$predeffield] = $default_values[$predeffield];
-                    }
-                }
-            }
-        }
-        return $predefined_fields;
-    }
 
     /**
      * Print the helpdesk form
@@ -4238,7 +4185,9 @@ JAVASCRIPT;
             $options['itilcategories_id'],
             $_SESSION["glpiactive_entity"]
         );
-        $options['_tickettemplate'] = $tt;
+
+        // override current fields in options with template fields and return the array of these predefined fields
+        $predefined_fields = $this->setPredefinedFields($tt, $options, $default_values);
 
         $delegating = User::getDelegateGroupsForUser($options['entities_id']);
 
@@ -4247,8 +4196,6 @@ JAVASCRIPT;
         } else {
             $options['_right'] = "delegate";
         }
-
-        $predefined_fields = $this->getPredefinedTemplateFields($tt, $options, $default_values);
 
         TemplateRenderer::getInstance()->display('components/itilobject/selfservice.html.twig', [
             'has_tickets_to_validate' => TicketValidation::getNumberToValidate(Session::getLoginUserID()) > 0,
@@ -4434,8 +4381,6 @@ JAVASCRIPT;
 
     public function showForm($ID, array $options = [])
     {
-        global $PLUGIN_HOOKS;
-
        // show full create form only to tech users
         if ($ID <= 0 && Session::getCurrentInterface() !== "central") {
             return;
@@ -4449,16 +4394,16 @@ JAVASCRIPT;
 
         $default_values = self::getDefaultValues();
 
-       // Restore saved value or override with page parameter
-        $saved = $this->restoreInput();
+        // Restore saved value or override with page parameter
+        $options['_saved'] = $this->restoreInput();
 
-       // Restore saved values and override $this->fields
-        $this->restoreSavedValues($saved);
+        // Restore saved values and override $this->fields
+        $this->restoreSavedValues($options['_saved']);
 
         foreach ($default_values as $name => $value) {
             if (!isset($options[$name])) {
-                if (isset($saved[$name])) {
-                    $options[$name] = $saved[$name];
+                if (isset($options['_saved'][$name])) {
+                    $options[$name] = $options['_saved'][$name];
                 } else {
                     $options[$name] = $value;
                 }
@@ -4481,7 +4426,7 @@ JAVASCRIPT;
         }
 
         if (!$ID) {
-           // Override defaut values from projecttask if needed
+            // Override defaut values from projecttask if needed
             if (isset($options['_projecttasks_id'])) {
                 $pt = new ProjectTask();
                 if ($pt->getFromDB($options['_projecttasks_id'])) {
@@ -4489,7 +4434,7 @@ JAVASCRIPT;
                     $options['content'] = $pt->getField('name');
                 }
             }
-           // Override defaut values from followup if needed
+            // Override defaut values from followup if needed
             if (isset($options['_promoted_fup_id']) && !$options['_skip_promoted_fields']) {
                 $fup = new ITILFollowup();
                 if ($fup->getFromDB($options['_promoted_fup_id'])) {
@@ -4500,17 +4445,17 @@ JAVASCRIPT;
                         'tickets_id_2' => $fup->fields['items_id']
                     ];
 
-                  // Set entity from parent
+                    // Set entity from parent
                     $parent_itemtype = $fup->getField('itemtype');
                     $parent = new $parent_itemtype();
                     if ($parent->getFromDB($fup->getField('items_id'))) {
                         $options['entities_id'] = $parent->getField('entities_id');
                     }
                 }
-              //Allow overriding the default values
+               //Allow overriding the default values
                 $options['_skip_promoted_fields'] = true;
             }
-           // Override defaut values from task if needed
+            // Override defaut values from task if needed
             if (isset($options['_promoted_task_id']) && !$options['_skip_promoted_fields']) {
                 $tickettask = new TicketTask();
                 if ($tickettask->getFromDB($options['_promoted_task_id'])) {
@@ -4523,18 +4468,18 @@ JAVASCRIPT;
                         'tickets_id_2' => $tickettask->fields['tickets_id']
                     ];
 
-                   // Set entity from parent
+                    // Set entity from parent
                     $parent = new Ticket();
                     if ($parent->getFromDB($tickettask->getField('tickets_id'))) {
                         $options['entities_id'] = $parent->getField('entities_id');
                     }
                 }
-               //Allow overriding the default values
+                //Allow overriding the default values
                 $options['_skip_promoted_fields'] = true;
             }
         }
 
-       // Check category / type validity
+        // Check category / type validity
         if ($options['itilcategories_id']) {
             $cat = new ITILCategory();
             if ($cat->getFromDB($options['itilcategories_id'])) {
@@ -4557,27 +4502,27 @@ JAVASCRIPT;
             }
         }
 
-       // Default check
+        // Default check
         if ($ID > 0) {
             $this->check($ID, READ);
         } else {
-           // Create item
+            // Create item
             $this->check(-1, CREATE, $options);
         }
 
         $userentities = [];
         if (!$ID) {
-            $userentities         = $this->getEntitiesForRequesters($options);
+            $userentities = $this->getEntitiesForRequesters($options);
 
             if (
                 count($userentities) > 0
                 && !in_array($this->fields["entities_id"], $userentities)
             ) {
-               // If entity is not in the list of user's entities,
-               // then use as default value the first value of the user's entites list
+                // If entity is not in the list of user's entities,
+                // then use as default value the first value of the user's entites list
                 $this->fields["entities_id"] = $userentities[0];
-               // Pass to values
-                $options['entities_id']       = $userentities[0];
+                // Pass to values
+                $options['entities_id']      = $userentities[0];
             }
         }
 
@@ -4590,10 +4535,6 @@ JAVASCRIPT;
             );
         }
 
-        if (!isset($options['template_preview'])) {
-            $options['template_preview'] = 0;
-        }
-
         if (!isset($options['_promoted_fup_id'])) {
             $options['_promoted_fup_id'] = 0;
         }
@@ -4604,18 +4545,16 @@ JAVASCRIPT;
 
        // Load template if available :
         $tt = $this->getITILTemplateToUse(
-            $options['template_preview'],
+            $options['template_preview'] ?? 0,
             $this->fields['type'],
             ($ID ? $this->fields['itilcategories_id'] : $options['itilcategories_id']),
             ($ID ? $this->fields['entities_id'] : $options['entities_id'])
         );
 
-        $tpl_key = self::getTemplateFormFieldName();
-        $predefined_fields = $this->getPredefinedTemplateFields($tt, $options, $default_values);
-       // Put ticket template on $options for actors
-        $options[str_replace('s_id', '', $tpl_key)] = $tt;
+        // override current fields in options with template fields and return the array of these predefined fields
+        $predefined_fields = $this->setPredefinedFields($tt, $options, $default_values);
 
-       // check right used for this ticket
+        // check right used for this ticket
         $canupdate     = !$ID
                         || (Session::getCurrentInterface() == "central"
                             && $this->canUpdateItem());
@@ -4628,15 +4567,6 @@ JAVASCRIPT;
             $canupdate = false;
             // No update for actors
             $options['_noupdate'] = true;
-        }
-
-        if ($options['template_preview']) {
-           // Add all values to fields of tickets for template preview
-            foreach ($options as $key => $val) {
-                if (!isset($this->fields[$key])) {
-                    $this->fields[$key] = $val;
-                }
-            }
         }
 
         $sla = new SLA();
@@ -4654,7 +4584,7 @@ JAVASCRIPT;
             'legacy_timeline_actions'  => $this->getLegacyTimelineActionsHTML(),
             'params'             => $options,
             'timeline'           => $this->getTimelineItems(),
-            'itiltemplate_key'   => $tpl_key,
+            'itiltemplate_key'   => self::getTemplateFormFieldName(),
             'itiltemplate'       => $tt,
             'predefined_fields'  => Toolbox::prepareArrayForInput($predefined_fields),
             'ticket_ticket'      => new Ticket_Ticket(),
@@ -6876,7 +6806,7 @@ JAVASCRIPT;
                     $input = [
                         'itemtype'        => 'Ticket',
                         'items_id'        => $merge_target_id,
-                        'content'         => $DB->escape($ticket->fields['name'] . "<br /><br />" . $ticket->fields['content']),
+                        'content'         => $DB->escape($ticket->fields['name'] . Sanitizer::encodeHtmlSpecialChars("<br /><br />") . $ticket->fields['content']),
                         'users_id'        => $ticket->fields['users_id_recipient'],
                         'date_creation'   => $ticket->fields['date_creation'],
                         'date_mod'        => $ticket->fields['date_mod'],

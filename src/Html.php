@@ -296,7 +296,7 @@ class Html
     {
 
         if (is_array($value)) {
-            return array_map([__CLASS__, __METHOD__], $value);
+            return array_map(__METHOD__, $value);
         }
         $order   = ['\r\n',
             '\n',
@@ -3793,6 +3793,9 @@ JS;
         if (!$enable_images) {
             $invalid_elements .= ',img';
         }
+        if (!GLPI_ALLOW_IFRAME_IN_RICH_TEXT) {
+            $invalid_elements .= ',iframe';
+        }
 
         $plugins = [
             'autoresize',
@@ -3831,6 +3834,7 @@ JS;
 
             // init editor
             tinyMCE.init(Object.assign({
+               branding: false,
                selector: '#{$name}',
 
                plugins: {$pluginsjs},
@@ -4127,7 +4131,7 @@ JAVASCRIPT
             echo "<tr><th>KEY</th><th>=></th><th>VALUE</th></tr>";
 
             foreach ($tab as $key => $val) {
-                $key = Sanitizer::sanitize($key, false);
+                $key = Sanitizer::encodeHtmlSpecialChars($key);
                 echo "<tr><td>";
                 echo $key;
                 $is_array = is_array($val);
@@ -5508,7 +5512,10 @@ HTML;
             if ($p['showtitle']) {
                 $display .= "<b>";
                 $display .= sprintf(__('%1$s (%2$s)'), __('File(s)'), Document::getMaxUploadSize());
-                $display .= DocumentType::showAvailableTypesLink(['display' => false]);
+                $display .= DocumentType::showAvailableTypesLink([
+                    'display' => false,
+                    'rand'    => $p['rand']
+                ]);
                 if ($p['required']) {
                     $display .= '<span class="required">*</span>';
                 }

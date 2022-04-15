@@ -34,7 +34,7 @@
 use Glpi\SocketModel;
 
 // Current version of GLPI
-define('GLPI_VERSION', '10.0.0-rc2');
+define('GLPI_VERSION', '10.0.0-rc3');
 define(
     "GLPI_SCHEMA_VERSION",
     GLPI_VERSION . (
@@ -429,7 +429,7 @@ $CFG_GLPI["globalsearch_types"]           = ['Computer', 'Contact', 'Contract',
     'Ticket', 'Problem', 'Change',
     'User', 'Group', 'Project', 'Supplier',
     'Budget', 'Certificate', 'Line', 'Datacenter',
-    'DCRoom', 'Enclosure', 'PDU', 'Rack', 'Cluster',
+    'DCRoom', 'Enclosure', 'PDU', 'Rack', 'Cluster', 'PassiveDCEquipment',
     'Domain', 'Appliance'
 ];
 
@@ -554,8 +554,8 @@ $CFG_GLPI['javascript'] = [
         'dashboard' => $dashboard_libs,
         'planning'  => ['clipboard', 'fullcalendar', 'tinymce', 'planning'],
         'ticket'    => array_merge(['rateit', 'tinymce', 'kanban'], $dashboard_libs),
-        'problem'   => ['tinymce', 'kanban'],
-        'change'    => ['tinymce', 'kanban'],
+        'problem'   => ['tinymce', 'kanban', 'sortable'],
+        'change'    => ['tinymce', 'kanban', 'sortable'],
         'stat'      => ['charts']
     ],
     'tools'     => [

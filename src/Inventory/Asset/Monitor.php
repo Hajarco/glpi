@@ -79,7 +79,6 @@ class Monitor extends InventoryAsset
             }
 
             if (!isset($serials[$val->serial])) {
-                $this->linked_items['Monitor'][] = $val;
                 $serials[$val->serial] = 1;
             }
         }
@@ -155,7 +154,7 @@ class Monitor extends InventoryAsset
                     // add monitor
                     $val->entities_id = $entities_id;
                     $val->is_dynamic = 1;
-                    $items_id = $monitor->add(Toolbox::addslashes_deep((array)$val), [], $this->withHistory());
+                    $items_id = $monitor->add(Toolbox::addslashes_deep((array)$val));
                 } else {
                     $items_id = $data['found_inventories'][0];
                 }

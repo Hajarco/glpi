@@ -798,7 +798,12 @@ class Session
     {
 
         return (isset($_SESSION["glpiinventoryuserrunning"])
-              && (strpos($_SERVER['PHP_SELF'], '/inventory.php') || defined('TU_USER')));
+              && (
+                  strpos($_SERVER['PHP_SELF'], '/inventory.php')
+                  || strpos($_SERVER['PHP_SELF'], '/index.php')
+                  || defined('TU_USER')
+              )
+        );
     }
 
     /**
@@ -1117,7 +1122,11 @@ class Session
     {
         global $DB;
 
-       //If GLPI is using the slave DB -> read only mode
+        if (Session::isInventory()) {
+            return true;
+        }
+
+        //If GLPI is using the slave DB -> read only mode
         if (
             $DB->isSlave()
             && ($right & (CREATE | UPDATE | DELETE | PURGE))

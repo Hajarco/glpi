@@ -31,12 +31,30 @@
  * ---------------------------------------------------------------------
  */
 
-include('../inc/includes.php');
+namespace tests\units;
 
-header("Content-Type: application/json; charset=UTF-8");
-Html::header_nocache();
-Session::checkLoginUser();
+use DbTestCase;
 
-$search = $_POST['searchText'] ?? "";
+class CommonTreeDropdown extends DbTestCase
+{
+    protected function completenameProvider(): iterable
+    {
+        yield [
+            'completename' => 'Root > Child 1 > Child 2', // "Root" > "Child 1" > "Child 2"
+            'expected'     => 'Root &#62; Child 1 &#62; Child 2',
+        ];
 
-echo json_encode(ShareDashboardDropdown::fetchValues($search));
+        yield [
+            'completename' => 'Root > &#60;ext&#62; Child 1 > Child 2', // "Root" > "<ext> Child 1" > "Child 2"
+            'expected'     => 'Root &#62; &#60;ext&#62; Child 1 &#62; Child 2',
+        ];
+    }
+
+    /**
+     * @dataProvider completenameProvider
+     */
+    public function testSanitizeSeparatorInCompletename(string $completename, string $expected)
+    {
+        $this->string(\CommonTreeDropdown::sanitizeSeparatorInCompletename($completename))->isEqualTo($expected);
+    }
+}

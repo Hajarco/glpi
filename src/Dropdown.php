@@ -176,13 +176,9 @@ class Dropdown
         }
 
         if ($params['readonly']) {
-            if ($params['multiple']) {
-                // Multiple values, print the names separated by commas
-                return implode(", ", $names);
-            } else {
-                // Single value, print the matching name
-                return $name;
-            }
+            return '<span class="form-control" readonly>'
+                . ($params['multiple'] ? implode(', ', $names) : $name)
+                . '</span>';
         }
 
        // Manage entity_sons
@@ -207,13 +203,12 @@ class Dropdown
             $params['condition'] = static::addNewCondition($params['condition']);
         }
 
-        if (!$item instanceof CommonTreeDropdown) {
-            if ($params['multiple']) {
-                $names = Sanitizer::unsanitize($names);
-            } else {
-                $name = Sanitizer::unsanitize($name);
-            }
+        if ($params['multiple']) {
+            $names = Sanitizer::unsanitize($names);
+        } else {
+            $name = Sanitizer::unsanitize($name);
         }
+
         $p = [
             'width'                => $params['width'],
             'itemtype'             => $itemtype,
@@ -283,6 +278,8 @@ class Dropdown
                 } else {
                     $options_tooltip['link']       = $item->getSearchURL();
                 }
+            } else {
+                $options_tooltip['awesome-class'] = 'btn btn-outline-secondary fa-info';
             }
 
             if (empty($comment)) {
@@ -299,7 +296,7 @@ class Dropdown
                 $paramscomment['withlink'] = $link_id;
             }
 
-           // Comment icon
+            // Comment icon
             $icons .= Ajax::updateItemOnSelectEvent(
                 $field_id,
                 $comment_id,
@@ -310,7 +307,7 @@ class Dropdown
             $options_tooltip['link_class'] = 'btn btn-outline-secondary';
             $icons .= Html::showToolTip($comment, $options_tooltip);
 
-           // Add icon
+            // Add icon
             if (
                 ($item instanceof CommonDropdown)
                 && $item->canCreate()
@@ -2055,7 +2052,7 @@ class Dropdown
                     $to_display[] = $elements[$value];
                 }
             }
-            $output .= implode('<br>', $to_display);
+            $output .= '<span class="form-control" readonly>' . implode(', ', $to_display) . '</span>';
         } else {
             $output  .= "<select name='$field_name' id='$field_id'";
 
@@ -2426,6 +2423,9 @@ class Dropdown
 
         $rand = mt_rand();
         Dropdown::showFromArray('display_type', $values, ['rand' => $rand]);
+        echo "<button type='submit' name='export' class='btn' " .
+             " title=\"" . _sx('button', 'Export') . "\">" .
+             "<i class='far fa-save'></i><span class='sr-only'>" . _sx('button', 'Export') . "<span>";
     }
 
 
@@ -2832,6 +2832,9 @@ class Dropdown
                         } else {
                             $outputval = $data['completename'];
                         }
+
+                        $outputval = CommonTreeDropdown::sanitizeSeparatorInCompletename($outputval);
+
                         $level = 0;
                     } else { // Need to check if parent is the good one
                         // Do not do if only get one item
@@ -2850,6 +2853,8 @@ class Dropdown
                                         // Do not do for first item for next page load
                                         if (!$firstitem) {
                                             $title = $item->fields['completename'];
+
+                                            $title = CommonTreeDropdown::sanitizeSeparatorInCompletename($title);
 
                                             $selection_text = $title;
 
@@ -2918,6 +2923,8 @@ class Dropdown
                         } else {
                             $title = $data['completename'];
                         }
+
+                        $title = CommonTreeDropdown::sanitizeSeparatorInCompletename($title);
 
                         $selection_text = $title;
 

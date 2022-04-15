@@ -70,11 +70,18 @@ trait Inventoriable
      */
     public function getInventoryFileName(bool $prepend_dir_path = true): ?string
     {
-        $source = new \AutoUpdateSystem();
-        $source->getFromDBByCrit(['name' => 'GLPI Native Inventory']);
 
-        if (!$this->isDynamic() || !isset($source->fields['id']) || $this->fields['autoupdatesystems_id'] != $source->fields['id']) {
-            return null;
+        if ($this->isField('autoupdatesystems_id')) {
+            $source = new \AutoUpdateSystem();
+            $source->getFromDBByCrit(['name' => 'GLPI Native Inventory']);
+
+            if (
+                !$this->isDynamic()
+                || !isset($source->fields['id'])
+                || $this->fields['autoupdatesystems_id'] != $source->fields['id']
+            ) {
+                return null;
+            }
         }
 
         $inventory_dir_path = GLPI_INVENTORY_DIR . '/';
@@ -87,7 +94,6 @@ trait Inventoriable
         if (!file_exists($inventory_dir_path . $filename)) {
             $filename = $conf->buildInventoryFileName($itemtype, $items_id, 'json');
             if (!file_exists($inventory_dir_path . $filename)) {
-                trigger_error('Inventory file missing: ' . $filename, E_USER_WARNING);
                 return null;
             }
         }

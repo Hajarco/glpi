@@ -36,6 +36,7 @@ namespace Glpi\Inventory\Asset;
 use Agent;
 use Blacklist;
 use CommonDBTM;
+use CommonDropdown;
 use Dropdown;
 use Glpi\Inventory\Conf;
 use Glpi\Inventory\Request;
@@ -64,6 +65,8 @@ abstract class InventoryAsset
     protected $main_asset;
     /** @var string */
     protected $request_query;
+    /** @var bool */
+    private bool $is_new = false;
 
     /**
      * Constructor
@@ -163,6 +166,7 @@ abstract class InventoryAsset
     public function handleLinks()
     {
         $knowns = [];
+        $foreignkey_itemtype = [];
 
         $blacklist = new Blacklist();
 
@@ -185,7 +189,7 @@ abstract class InventoryAsset
                     $manufacturer = new Manufacturer();
                     $value->$key  = $manufacturer->processName($value->$key);
                     if ($key == 'bios_manufacturers_id') {
-                        $this->foreignkey_itemtype[$key] = getItemtypeForForeignKeyField('manufacturers_id');
+                        $foreignkey_itemtype[$key] = getItemtypeForForeignKeyField('manufacturers_id');
                     }
                 }
                 if (!is_numeric($val)) {
@@ -207,11 +211,11 @@ abstract class InventoryAsset
                             $entities_id,
                             ['manufacturer' => $manufacturer_name]
                         );
-                    } else if (isset($this->foreignkey_itemtype[$key])) {
-                        $value->$key = Dropdown::importExternal($this->foreignkey_itemtype[$key], addslashes($value->$key), $entities_id);
-                    } else if (isForeignKeyField($key) && $key != "users_id") {
-                        $this->foreignkey_itemtype[$key] = getItemtypeForForeignKeyField($key);
-                        $value->$key = Dropdown::importExternal($this->foreignkey_itemtype[$key], addslashes($value->$key), $entities_id);
+                    } else if (isset($foreignkey_itemtype[$key])) {
+                        $value->$key = Dropdown::importExternal($foreignkey_itemtype[$key], addslashes($value->$key), $entities_id);
+                    } else if (isForeignKeyField($key) && is_a($itemtype = getItemtypeForForeignKeyField($key), CommonDropdown::class, true)) {
+                        $foreignkey_itemtype[$key] = $itemtype;
+                        $value->$key = Dropdown::importExternal($foreignkey_itemtype[$key], addslashes($value->$key), $entities_id);
 
                         if (
                             $key == 'operatingsystemkernelversions_id'
@@ -224,7 +228,7 @@ abstract class InventoryAsset
                                 $kversion->update([
                                     'id'                          => $kversion->getID(),
                                     'operatingsystemkernels_id'   => $value->operatingsystemkernels_id
-                                ], $this->withHistory());
+                                ]);
                             }
                         }
                     }
@@ -296,21 +300,6 @@ abstract class InventoryAsset
     }
 
     /**
-     * Is history enabled on this asset?
-     *
-     * @param boolean|null $bool To change with_history
-     *
-     * @return boolean
-     */
-    public function withHistory($bool = null): bool
-    {
-        if ($bool !== null) {
-            $this->with_history = (bool)$bool;
-        }
-        return $this->with_history;
-    }
-
-    /**
      * Set item and itemtype
      *
      * @param CommonDBTM $item Item instance
@@ -369,9 +358,21 @@ abstract class InventoryAsset
 
         if (!($item->fields['is_global'] ?? false)) {
             if (isset($citem->fields['id'])) {
-                $citem->delete(['id' => $citem->fields['id']], true, $this->withHistory());
+                $citem->delete(['id' => $citem->fields['id']], true);
             }
-            $citem->add($input, [], $this->withHistory());
+            $citem->add($input);
         }
+    }
+
+    protected function setNew(): self
+    {
+        $this->is_new = true;
+        $this->with_history = false;//do not handle history on main item first import
+        return $this;
+    }
+
+    public function isNew(): bool
+    {
+        return $this->is_new;
     }
 }

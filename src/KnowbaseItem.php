@@ -416,12 +416,6 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria
 
        // Profile / entities
         $this->profiles = KnowbaseItem_Profile::getProfiles($this->fields['id']);
-
-       //Linked kb items
-        $this->knowbase_items = KnowbaseItem_Item::getItems($this);
-
-       //Linked kb categories
-        $this->knowbase_categories = KnowbaseItem_KnowbaseItemCategory::getItems($this);
     }
 
 
@@ -823,6 +817,7 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria
         echo "<tr class='tab_bg_1'>";
         echo "<td colspan=2></td>";
         echo "<td>";
+        echo "<input type='hidden' name='users_id' value=\"" . Session::getLoginUserID() . "\">";
         if ($this->fields["date_creation"]) {
            //TRANS: %s is the datetime of insertion
             printf(__('Created on %s'), Html::convDateTime($this->fields["date_creation"]));
@@ -1038,7 +1033,8 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria
         $this->updateCounter();
 
         $tmp = [];
-        foreach ($this->knowbase_categories as $category) {
+        $categories = KnowbaseItem_KnowbaseItemCategory::getItems($this);
+        foreach ($categories as $category) {
             $knowbaseitemcategories_id = $category['knowbaseitemcategories_id'];
             $fullcategoryname          = getTreeValueCompleteName(
                 "glpi_knowbaseitemcategories",
@@ -1831,7 +1827,8 @@ class KnowbaseItem extends CommonDBVisible implements ExtraVisibilityCriteria
                 if ($output_type == Search::HTML_OUTPUT) {
                     $tmp = [];
                     $ki->getFromDB($data["id"]);
-                    foreach ($ki->knowbase_categories as $category) {
+                    $categories = KnowbaseItem_KnowbaseItemCategory::getItems($ki);
+                    foreach ($categories as $category) {
                         $knowbaseitemcategories_id = $category['knowbaseitemcategories_id'];
                         $fullcategoryname          = getTreeValueCompleteName(
                             "glpi_knowbaseitemcategories",
