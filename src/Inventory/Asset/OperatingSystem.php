@@ -2,13 +2,15 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2010-2022 by the FusionInventory Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,27 +18,32 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace Glpi\Inventory\Asset;
 
 use Glpi\Inventory\Conf;
+use Glpi\Toolbox\Sanitizer;
 use Item_OperatingSystem;
 use RuleDictionnaryOperatingSystemArchitectureCollection;
-use Toolbox;
+use RuleDictionnaryOperatingSystemCollection;
+use RuleDictionnaryOperatingSystemEditionCollection;
+use RuleDictionnaryOperatingSystemServicePackCollection;
+use RuleDictionnaryOperatingSystemVersionCollection;
 
 class OperatingSystem extends InventoryAsset
 {
@@ -75,21 +82,36 @@ class OperatingSystem extends InventoryAsset
             $val->operatingsystems_id = $val->full_name;
         }
 
-        if (
-            property_exists($val, 'operatingsystemarchitectures_id')
-            && $val->operatingsystemarchitectures_id != ''
-        ) {
-            $rulecollection = new RuleDictionnaryOperatingSystemArchitectureCollection();
-            $res_rule = $rulecollection->processAllRules(['name' => $val->operatingsystemarchitectures_id]);
-            if (isset($res_rule['name'])) {
-                $val->operatingsystemarchitectures_id = $res_rule['name'];
-            }
-            if ($val->operatingsystemarchitectures_id == '0') {
-                $val->operatingsystemarchitectures_id = '';
-            }
+        if (property_exists($val, 'install_date')) {
+            $val->install_date = date('Y-m-d', strtotime($val->install_date));
         }
-        if (property_exists($val, 'operatingsystemservicepacks_id') && $val->operatingsystemservicepacks_id == '0') {
-            $val->operatingsystemservicepacks_id = '';
+
+        $mapping = [
+            'operatingsystems_id'               => RuleDictionnaryOperatingSystemCollection::class,
+            'operatingsystemversions_id'        => RuleDictionnaryOperatingSystemVersionCollection::class,
+            'operatingsystemservicepacks_id'    => RuleDictionnaryOperatingSystemServicePackCollection::class,
+            'operatingsystemarchitectures_id'   => RuleDictionnaryOperatingSystemArchitectureCollection::class,
+            'operatingsystemeditions_id'        => RuleDictionnaryOperatingSystemEditionCollection::class
+        ];
+
+        $rule_input = [
+            'os_name'           => $val->operatingsystems_id ?? '',
+            'os_version_name'   => $val->operatingsystemversions_id ?? '',
+            'servicepack_name'  => $val->operatingsystemservicepacks_id ?? '',
+            'arch_name'         => $val->operatingsystemarchitectures_id ?? '',
+            'os_edition'        => $val->operatingsystemeditions_id ?? '',
+        ];
+
+        foreach ($mapping as $key => $rule_class) {
+            $rulecollection = new $rule_class();
+            $res_rule = $rulecollection->processAllRules($rule_input);
+            if (isset($res_rule['name'])) {
+                $val->{$key} = $res_rule['name'];
+            }
+
+            if (property_exists($val, $key) && $val->{$key} == '0') {
+                $val->{$key} = '';
+            }
         }
 
         $this->data = [$val];
@@ -109,41 +131,34 @@ class OperatingSystem extends InventoryAsset
             'items_id'  => $this->item->fields['id']
         ]);
 
-        $input_os = [
+        $input_os = $this->handleInput($val, $ios) + [
             'itemtype'                          => $this->item->getType(),
             'items_id'                          => $this->item->fields['id'],
-            'operatingsystemarchitectures_id'   => $val->operatingsystemarchitectures_id ?? 0,
-            'operatingsystemkernelversions_id'  => $val->operatingsystemkernelversions_id ?? 0,
-            'operatingsystems_id'               => $val->operatingsystems_id,
-            'operatingsystemversions_id'        => $val->operatingsystemversions_id ?? 0,
-            'operatingsystemservicepacks_id'    => $val->operatingsystemservicepacks_id ?? 0,
-            'licenseid'                         => $val->licenseid ?? '',
-            'license_number'                    => $val->license_number ?? '',
             'is_dynamic'                        => 1,
             'entities_id'                       => $this->item->fields['entities_id']
         ];
 
         if (!$ios->isNewItem()) {
-           //OS exists, check for updates
+            //OS exists, check for updates
             $same = true;
             foreach ($input_os as $key => $value) {
-                if ($ios->fields[$key] != $value) {
+                if (array_key_exists($key, $ios->fields) && $ios->fields[$key] != $value) {
                     $same = false;
                     break;
                 }
             }
             if ($same === false) {
-                $ios->update(['id' => $ios->getID()] + Toolbox::addslashes_deep($input_os));
+                $ios->update(Sanitizer::sanitize(['id' => $ios->getID()] + $input_os));
             }
         } else {
-            $ios->add(Toolbox::addslashes_deep($input_os));
+            $ios->add(Sanitizer::sanitize($input_os));
         }
 
-        $val->operatingsystems_id = $ios->fields['id'];
-        ;
-        $this->operatingsystems_id = $val->operatingsystems_id;
+        $ioskey = 'operatingsystems_id' . $val->operatingsystems_id;
+        $this->known_links[$ioskey] = $ios->fields['id'];
+        $this->operatingsystems_id = $ios->fields['id'];
 
-       //cleanup
+        //cleanup
         if (!$this->main_asset || !$this->main_asset->isPartial()) {
             $iterator = $DB->request([
                 'FROM' => $ios->getTable(),
@@ -173,5 +188,10 @@ class OperatingSystem extends InventoryAsset
     public function getId()
     {
         return $this->operatingsystems_id;
+    }
+
+    public function getItemtype(): string
+    {
+        return \Item_OperatingSystem::class;
     }
 }

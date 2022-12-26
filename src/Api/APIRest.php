@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -91,23 +93,23 @@ class APIRest extends API
     public function call()
     {
 
-       //parse http request and find parts
+        //parse http request and find parts
         $this->request_uri  = $_SERVER['REQUEST_URI'];
         $this->verb         = $_SERVER['REQUEST_METHOD'];
         $path_info          = (isset($_SERVER['PATH_INFO'])) ? str_replace("api/", "", trim($_SERVER['PATH_INFO'], '/')) : '';
         $this->url_elements = explode('/', $path_info);
 
-       // retrieve requested resource
+        // retrieve requested resource
         $resource      = trim(strval($this->url_elements[0]));
         $is_inline_doc = (strlen($resource) == 0) || ($resource == "api");
 
-       // Add headers for CORS
+        // Add headers for CORS
         $this->cors($this->verb);
 
-       // retrieve paramaters (in body, query_string, headers)
+        // retrieve paramaters (in body, query_string, headers)
         $this->parseIncomingParams($is_inline_doc);
 
-       // show debug if required
+        // show debug if required
         if (isset($this->parameters['debug'])) {
             $this->debug = $this->parameters['debug'];
             if (empty($this->debug)) {
@@ -119,79 +121,83 @@ class APIRest extends API
             }
         }
 
-       // retrieve session (if exist)
+        // retrieve session (if exist)
         $this->retrieveSession();
         $this->initApi();
         $this->manageUploadedFiles();
 
-       // retrieve param who permit session writing
+        // retrieve param who permit session writing
         if (isset($this->parameters['session_write'])) {
             $this->session_write = (bool)$this->parameters['session_write'];
         }
 
-       // inline documentation (api/)
+        // Do not unlock the php session for ressources that may handle it
+        if (in_array($resource, $this->getRessourcesWithSessionWrite())) {
+            $this->session_write = true;
+        }
+
+        // Check API session unless blacklisted (init session, ...)
+        if (!$is_inline_doc && !in_array($resource, $this->getRessourcesAllowedWithoutSession())) {
+            $this->initEndpoint(true, $resource);
+        }
+
+        // inline documentation (api/)
         if ($is_inline_doc) {
             $this->inlineDocumentation("apirest.md");
-        } else if ($resource === "initSession") {
-           // ## DECLARE ALL ENDPOINTS ##
-           // login into glpi
-            $this->session_write = true;
+        } elseif ($resource === "initSession") {
+            // ## DECLARE ALL ENDPOINTS ##
+            // login into glpi
             $this->returnResponse($this->initSession($this->parameters));
-        } else if ($resource === "killSession") {
-           // logout from glpi
-            $this->session_write = true;
+        } elseif ($resource === "killSession") {
+            // logout from glpi
             $this->returnResponse($this->killSession());
-        } else if ($resource === "changeActiveEntities") {
-           // change active entities
-            $this->session_write = true;
+        } elseif ($resource === "changeActiveEntities") {
+            // change active entities
             $this->returnResponse($this->changeActiveEntities($this->parameters));
-        } else if ($resource === "getMyEntities") {
-           // get all entities of logged user
+        } elseif ($resource === "getMyEntities") {
+            // get all entities of logged user
             $this->returnResponse($this->getMyEntities($this->parameters));
-        } else if ($resource === "getActiveEntities") {
-           // get curent active entity
+        } elseif ($resource === "getActiveEntities") {
+            // get curent active entity
             $this->returnResponse($this->getActiveEntities($this->parameters));
-        } else if ($resource === "changeActiveProfile") {
-           // change active profile
-            $this->session_write = true;
+        } elseif ($resource === "changeActiveProfile") {
+            // change active profile
             $this->returnResponse($this->changeActiveProfile($this->parameters));
-        } else if ($resource === "getMyProfiles") {
-           // get all profiles of current logged user
+        } elseif ($resource === "getMyProfiles") {
+            // get all profiles of current logged user
             $this->returnResponse($this->getMyProfiles($this->parameters));
-        } else if ($resource === "getActiveProfile") {
-           // get current active profile
+        } elseif ($resource === "getActiveProfile") {
+            // get current active profile
             $this->returnResponse($this->getActiveProfile($this->parameters));
-        } else if ($resource === "getFullSession") {
-           // get complete php session
+        } elseif ($resource === "getFullSession") {
+            // get complete php session
             $this->returnResponse($this->getFullSession($this->parameters));
-        } else if ($resource === "getGlpiConfig") {
-           // get complete php var $CFG_GLPI
+        } elseif ($resource === "getGlpiConfig") {
+            // get complete php var $CFG_GLPI
             $this->returnResponse($this->getGlpiConfig($this->parameters));
-        } else if ($resource === "listSearchOptions") {
-           // list searchOptions of an itemtype
+        } elseif ($resource === "listSearchOptions") {
+            // list searchOptions of an itemtype
             $itemtype = $this->getItemtype(1);
             $this->returnResponse($this->listSearchOptions($itemtype, $this->parameters));
-        } else if ($resource === "getMultipleItems") {
-           // get multiple items (with various itemtype)
+        } elseif ($resource === "getMultipleItems") {
+            // get multiple items (with various itemtype)
             $this->returnResponse($this->getMultipleItems($this->parameters));
-        } else if ($resource === "search") {
-           // Search on itemtype
-            $this->checkSessionToken();
-
+        } elseif ($resource === "search") {
+            // Search on itemtype
             $itemtype = $this->getItemtype(1, true, true);
-           //clean stdObjects in parameter
+            // clean stdObjects in parameter
             $params   = json_decode(json_encode($this->parameters), true);
-           //search
+            // search
             $response =  $this->searchItems($itemtype, $params);
 
-           //add pagination headers
+            // add pagination headers
             $additionalheaders                  = [];
             $additionalheaders["Accept-Range"]  = $itemtype . " " . Toolbox::get_max_input_vars();
             if ($response['totalcount'] > 0) {
                 $additionalheaders["Content-Range"] = $response['content-range'];
             }
 
-           // diffent http return codes for complete or partial response
+            // different http return codes for complete or partial response
             if ($response['count'] >= $response['totalcount']) {
                 $code = 200; // full content
             } else {
@@ -199,13 +205,13 @@ class APIRest extends API
             }
 
             $this->returnResponse($response, $code, $additionalheaders);
-        } else if ($resource === "lostPassword") {
+        } elseif ($resource === "lostPassword") {
             if ($this->verb != 'PUT' && $this->verb != 'PATCH') {
-               // forbid password reset when HTTP verb is not PUT or PATCH
+                // forbid password reset when HTTP verb is not PUT or PATCH
                 $this->returnError(__("Only HTTP verb PUT is allowed"));
             }
             $this->returnResponse($this->lostPassword($this->parameters));
-        } else if ($resource == 'getMassiveActions') {
+        } elseif ($resource == 'getMassiveActions') {
             $this->returnResponse(
                 $this->getMassiveActions(
                     $this->getItemtype(1, false, false),
@@ -213,7 +219,7 @@ class APIRest extends API
                     json_decode(json_encode($this->parameters), true)['is_deleted'] ?? false,
                 )
             );
-        } else if ($resource == "getMassiveActionParameters") {
+        } elseif ($resource == "getMassiveActionParameters") {
             $this->returnResponse(
                 $this->getMassiveActionParameters(
                     $this->getItemtype(1, false, false),
@@ -221,7 +227,7 @@ class APIRest extends API
                     json_decode(json_encode($this->parameters), true)['is_deleted'] ?? false,
                 )
             );
-        } else if ($resource == "applyMassiveAction") {
+        } elseif ($resource == "applyMassiveAction") {
            // Parse parameters
             $params = json_decode(json_encode($this->parameters), true);
             $ids = $params['ids'] ?? [];
@@ -236,10 +242,10 @@ class APIRest extends API
                 $ids,
                 $params['input'] ?? []
             );
-        } else if (preg_match('%user/(\d+)/picture%i', $path_info, $matches)) {
+        } elseif (preg_match('%user/(\d+)/picture%i', $path_info, $matches)) {
             $this->userPicture($matches[1]);
         } else {
-           // commonDBTM manipulation
+            // commonDBTM manipulation
             $itemtype          = $this->getItemtype(0);
             $id                = $this->getId();
             $additionalheaders = [];
@@ -257,22 +263,22 @@ class APIRest extends API
                             $additionalheaders['Last-Modified'] = gmdate("D, d M Y H:i:s", $datemod) . " GMT";
                         }
                     } else {
-                     // return collection of items
+                        // return collection of items
                         $totalcount = 0;
                         $response = $this->getItems($itemtype, $this->parameters, $totalcount);
 
-                     //add pagination headers
+                        //add pagination headers
                         $range = [0, $_SESSION['glpilist_limit']];
                         if (isset($this->parameters['range'])) {
                             $range = explode("-", $this->parameters['range']);
                         }
 
-                     // fix end range
+                        // fix end range
                         if ($range[1] > $totalcount - 1) {
                             $range[1] = $totalcount - 1;
                         }
 
-                   // trigger partial content return code
+                        // trigger partial content return code
                         if ($range[1] - $range[0] + 1 < $totalcount) {
                             $code = 206; // partial content
                         }
@@ -291,7 +297,7 @@ class APIRest extends API
                         // add a location targetting created element
                         $additionalheaders['location'] = self::$api_url . "/$itemtype/" . $response['id'];
                     } else {
-                       // add a link header targetting created elements
+                        // add a link header targetting created elements
                         $additionalheaders['link'] = "";
                         foreach ($response as $created_item) {
                             if ($created_item['id']) {
@@ -299,7 +305,7 @@ class APIRest extends API
                                                      $created_item['id'] . ",";
                             }
                         }
-                       // remove last comma
+                        // remove last comma
                         $additionalheaders['link'] = trim($additionalheaders['link'], ",");
                     }
                     break;
@@ -309,7 +315,7 @@ class APIRest extends API
                     if (!isset($this->parameters['input'])) {
                         $this->messageBadArrayError();
                     }
-                   // if id is passed by query string, add it into input parameter
+                    // if id is passed by query string, add it into input parameter
                     $input = (array) ($this->parameters['input']);
                     if (
                         ($id > 0 || $id == 0 && $itemtype == "Entity")
@@ -321,9 +327,9 @@ class APIRest extends API
                     break;
 
                 case "DELETE": //delete item(s)
-                   // if id is passed by query string, construct an object with it
+                    // if id is passed by query string, construct an object with it
                     if ($id !== false) {
-                       //override input
+                        // override input
                         $this->parameters['input']     = new stdClass();
                         $this->parameters['input']->id = $id;
                     }
@@ -373,13 +379,17 @@ class APIRest extends API
                 }
 
                // Load namespace for deprecated
-                if (Toolbox::isAPIDeprecated($itemtype)) {
-                     $itemtype = "Glpi\Api\Deprecated\\$itemtype";
+                $deprecated = Toolbox::isAPIDeprecated($itemtype);
+                if ($deprecated) {
+                    $itemtype = "Glpi\Api\Deprecated\\$itemtype";
                 }
 
                // Get case sensitive itemtype name
-                $rc = new \ReflectionClass($itemtype);
-                $itemtype = $rc->getShortName();
+                $itemtype = (new \ReflectionClass($itemtype))->getName();
+                if ($deprecated) {
+                    // Remove deprecated namespace
+                    $itemtype = str_replace("Glpi\Api\Deprecated\\", "", $itemtype);
+                }
                 return $itemtype;
             }
             $this->returnError(
@@ -641,5 +651,16 @@ class APIRest extends API
             echo file_get_contents(GLPI_ROOT . '/' . $file);
         }
         exit;
+    }
+
+    /**
+     * Read X-GLPI-Sanitized-Content header value (default: true)
+     *
+     * @return bool
+     */
+    public function returnSanitizedContent(): bool
+    {
+        $sanitized_content = $_SERVER['HTTP_X_GLPI_SANITIZED_CONTENT'] ?? true;
+        return filter_var($sanitized_content, FILTER_VALIDATE_BOOLEAN);
     }
 }

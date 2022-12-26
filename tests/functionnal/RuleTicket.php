@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -325,37 +327,33 @@ class RuleTicket extends DbTestCase
             ['tickets_id' => $tickets_id, 'type' => \CommonITILActor::ASSIGN]
         ))->isEqualTo(1);
 
-       // Remove assign self as default tech from session
-        $default_tech = $_SESSION['glpiset_default_tech'];
-        $_SESSION['glpiset_default_tech'] = false;
-
        // Check ticket that trigger rule on update
         $ticket = new \Ticket();
         $tickets_id = $ticket->add($ticket_input = [
-            'name'    => 'some ticket',
-            'content' => 'test'
+            'name'             => 'some ticket',
+            'content'          => 'test',
+            '_users_id_assign' => getItemByTypeName('User', TU_USER, true),
         ]);
+        unset($ticket_input['_users_id_assign']);
         $this->checkInput($ticket, $tickets_id, $ticket_input);
-        $this->integer((int)$ticket->getField('status'))->isEqualTo(\Ticket::INCOMING);
+        $this->integer((int)$ticket->getField('status'))->isEqualTo(\Ticket::ASSIGNED);
         $this->integer(countElementsInTable(
             \Ticket_User::getTable(),
             ['tickets_id' => $tickets_id, 'type' => \CommonITILActor::ASSIGN]
-        ))->isEqualTo(0);
+        ))->isEqualTo(1); // Assigned to TU_USER
 
         $this->boolean($ticket->update([
-            'id'      => $tickets_id,
-            'name'    => 'assign to tech (on update)',
-            'content' => 'test'
+            'id'               => $tickets_id,
+            'name'             => 'assign to tech (on update)',
+            'content'          => 'test',
+            '_users_id_assign' => getItemByTypeName('User', 'glpi', true), // rule should erase this value
         ]))->isTrue();
         $this->boolean($ticket->getFromDB($tickets_id))->isTrue();
         $this->integer((int)$ticket->getField('status'))->isEqualTo(\Ticket::INCOMING);
         $this->integer(countElementsInTable(
             \Ticket_User::getTable(),
             ['tickets_id' => $tickets_id, 'type' => \CommonITILActor::ASSIGN]
-        ))->isEqualTo(1);
-
-       // Restore assign self as default tech in session
-        $_SESSION['glpiset_default_tech'] = $default_tech;
+        ))->isEqualTo(2); // Assigned to TU_USER + tech
     }
 
     public function testITILCategoryAssignFromRule()
@@ -2222,8 +2220,47 @@ class RuleTicket extends DbTestCase
         ))->isEqualTo(2);
     }
 
-    public function testHeaderCriteria(): void
+    protected function testMailHeaderCriteriaProvider()
     {
+        return [
+            [
+                "pattern"  => 'pattern_priority',
+                "header"   => 'x-priority',
+            ],
+            [
+                "pattern"  => 'pattern_from',
+                "header"   => 'from',
+            ],
+            [
+                "pattern"  => 'pattern_to',
+                "header"   => 'to',
+            ],
+            [
+                "pattern"  => 'pattern_reply-to',
+                "header"   => 'reply-to',
+            ],
+            [
+                "pattern"  => 'pattern_in-reply-to',
+                "header"   => 'in-reply-to',
+            ],
+            [
+                "pattern"  => 'pattern_subject',
+                "header"   => 'subject',
+            ],
+        ];
+    }
+
+    /**
+     * @dataprovider testMailHeaderCriteriaProvider
+     */
+    public function testMailHeaderCriteria(
+        string $pattern,
+        string $header
+    ) {
+        // clean right singleton
+        \SingletonRuleList::getInstance("RuleTicket", 0)->load = 0;
+        \SingletonRuleList::getInstance("RuleTicket", 0)->list = [];
+
         $this->login();
 
         $ruleticket = new \RuleTicket();
@@ -2231,7 +2268,7 @@ class RuleTicket extends DbTestCase
         $ruleaction = new \RuleAction();
 
         $ruletid = $ruleticket->add($ruletinput = [
-            'name'         => 'test x-priority',
+            'name'         => 'test ' . $header,
             'match'        => 'AND',
             'is_active'    => 1,
             'sub_type'     => 'RuleTicket',
@@ -2242,9 +2279,9 @@ class RuleTicket extends DbTestCase
 
         $crit_id = $rulecrit->add($crit_input = [
             'rules_id'  => $ruletid,
-            'criteria'  => '_x-priority',
+            'criteria'  => "_" . $header,
             'condition' => \Rule::PATTERN_IS,
-            'pattern'   => '1',
+            'pattern'   => $pattern,
         ]);
         $this->checkInput($rulecrit, $crit_id, $crit_input);
 
@@ -2257,13 +2294,12 @@ class RuleTicket extends DbTestCase
         ]);
         $this->checkInput($ruleaction, $action_id, $action_input);
 
-        // Create ticket with "x-priority" = 1 in "_head" property
         $ticket = new \Ticket();
         $tickets_id = $ticket->add([
-            'name'              => 'test x-priority header',
-            'content'           => 'test x-priority header',
+            'name'              => 'test ' . $header . ' header',
+            'content'           => 'test ' . $header . ' header',
             '_head'             => [
-                'x-priority' => '1'
+                $header => $pattern
             ]
         ]);
 
@@ -2271,12 +2307,12 @@ class RuleTicket extends DbTestCase
         $this->boolean($ticket->getFromDB($tickets_id))->isTrue();
         $this->integer($ticket->fields['priority'])->isEqualTo(5);
 
-        // Retest ticket with different x-priority
+        // Retest ticket with different header
         $tickets_id = $ticket->add([
-            'name'              => 'test x-priority header',
-            'content'           => 'test x-priority header',
+            'name'              => 'test ' . $header . ' header',
+            'content'           => 'test ' . $header . ' header',
             '_head'             => [
-                'x-priority' => '2'
+                $header => 'header_foo_bar'
             ]
         ]);
 
@@ -2624,5 +2660,140 @@ class RuleTicket extends DbTestCase
             'type'          => \CommonITILActor::ASSIGN
         ]);
         $this->boolean($result)->isTrue();
+    }
+
+    public function testNewActors()
+    {
+        $this->login();
+
+        $tech_id   = getItemByTypeName('User', "tech", true);
+        $groups_id = getItemByTypeName('Group', '_test_group_1', true);
+
+        $supplier = new \Supplier();
+        $suppliers_id = $supplier->add([
+            'name'        => 'Supplier 1',
+            'entities_id' => 0,
+        ]);
+        $this->integer($suppliers_id)->isGreaterThan(0);
+
+        $location = new \Location();
+        $locations_id = $location->add([
+            'name' => 'Location 1',
+        ]);
+        $this->integer($locations_id)->isGreaterThan(0);
+
+        // Create rule
+        $ruleticket = new \RuleTicket();
+        $rulecrit   = new \RuleCriteria();
+        $ruleaction = new \RuleAction();
+
+        $ruletid = $ruleticket->add($ruletinput = [
+            'name'         => 'testNewActors',
+            'match'        => 'OR',
+            'is_active'    => 1,
+            'sub_type'     => 'RuleTicket',
+            'condition'    => \RuleTicket::ONADD,
+            'is_recursive' => 1,
+        ]);
+        $this->checkInput($ruleticket, $ruletid, $ruletinput);
+
+        //create criteria to check
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_users_id_requester',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $tech_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_users_id_observer',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $tech_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_users_id_assign',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $tech_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_groups_id_requester',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $groups_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_groups_id_observer',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $groups_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_groups_id_assign',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $groups_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+        $crit_id = $rulecrit->add($crit_input = [
+            'rules_id'  => $ruletid,
+            'criteria'  => '_suppliers_id_assign',
+            'condition' => \Rule::PATTERN_IS,
+            'pattern'   => $suppliers_id,
+        ]);
+        $this->checkInput($rulecrit, $crit_id, $crit_input);
+
+        //create action to add group as group requester
+        $action_id = $ruleaction->add($action_input = [
+            'rules_id'    => $ruletid,
+            'action_type' => 'assign',
+            'field'       => 'locations_id',
+            'value'       => $locations_id,
+        ]);
+        $this->checkInput($ruleaction, $action_id, $action_input);
+
+        // test all common actors
+        foreach (['User', 'Group'] as $actoritemtype) {
+            $items_id = ($actoritemtype == "User") ? $tech_id : $groups_id;
+            foreach (['requester', 'observer', 'assign'] as $actortype) {
+                $ticket = new \Ticket();
+                $tickets_id = $ticket->add([
+                    'name'    => 'test actors',
+                    'content' => 'test actors',
+                    '_actors' => [
+                        $actortype => [
+                            [
+                                'itemtype' => $actoritemtype,
+                                'items_id' => $items_id,
+                            ]
+                        ]
+                    ],
+                ]);
+                $ticket->getFromDB($tickets_id);
+                $this->integer($ticket->fields['locations_id'])->isEqualTo($locations_id);
+            }
+        }
+
+        // test also suppliers for assign
+        $ticket = new \Ticket();
+        $tickets_id = $ticket->add([
+            'name'    => 'test actors supplier',
+            'content' => 'test actors supplier',
+            '_actors' => [
+                'assign' => [
+                    [
+                        'itemtype' => 'Supplier',
+                        'items_id' => $suppliers_id,
+                    ]
+                ]
+            ],
+        ]);
+        $ticket->getFromDB($tickets_id);
+        $this->integer($ticket->fields['locations_id'])->isEqualTo($locations_id);
     }
 }

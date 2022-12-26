@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -395,5 +397,51 @@ class Project extends DbTestCase
 
        // Compare teams
         $this->array($team_clone)->isEqualTo($team);
+
+        // Add a task to project
+        $task1_name = 'Project testClone - Task' . mt_rand();
+        $task1 = $this->createItem('ProjectTask', [
+            'projects_id' => $projects_id,
+            'name'        => $task1_name,
+        ]);
+        $task1_id = $task1->fields['id'];
+
+        // Add a task, child of the previous task
+        $task2_name = 'Project testClone - Task' . mt_rand();
+        $task2 = $this->createItem('ProjectTask', [
+            'projects_id'     => $projects_id,
+            'name'            => $task2_name,
+            'projecttasks_id' => $task1_id,
+        ]);
+        $task2_id = $task2->fields['id'];
+
+        // Clone project
+        $projects_id_clone = $project->clone();
+        $this->integer($projects_id_clone)->isGreaterThan(0);
+
+        // Load clone
+        $project_clone = new \Project();
+        $this->boolean($project_clone->getFromDB($projects_id_clone))->isTrue();
+
+        // Load clone tasks
+        $project_task = new ProjectTask();
+        $tasks_clone = [];
+        foreach ($project_task->find(['projects_id' => $projects_id_clone]) as $row) {
+            $tasks_clone[] = [
+                'projecttasks_id' => $row['projecttasks_id'],
+            ];
+        }
+
+        $expected = [
+            [
+                'projecttasks_id' => 0,
+            ],
+            [
+                'projecttasks_id' => $task1_id + 2,
+            ],
+        ];
+
+        // Compare tasks
+        $this->array($tasks_clone)->isEqualTo($expected);
     }
 }

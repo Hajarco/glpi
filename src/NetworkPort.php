@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -57,6 +59,7 @@ class NetworkPort extends CommonDBChild
     protected static $forward_entity_to = ['NetworkName'];
 
     public static $rightname                   = 'networking';
+    protected $displaylist = false;
 
     /**
      * Subset of input that will be used for NetworkPortInstantiation.
@@ -93,6 +96,11 @@ class NetworkPort extends CommonDBChild
                 break;
         }
         return $value;
+    }
+
+    public function useDeletedToLockIfDynamic()
+    {
+        return false;
     }
 
     public function __set(string $property, $value)
@@ -512,6 +520,7 @@ class NetworkPort extends CommonDBChild
 
     public function post_addItem()
     {
+        parent::post_addItem(); //for history
         $this->updateDependencies(!$this->input['_no_history']);
         $this->updateMetrics();
     }
@@ -561,6 +570,7 @@ class NetworkPort extends CommonDBChild
         $this->addStandardTab('NetworkPortMetrics', $ong, $options);
         $this->addStandardTab('NetworkName', $ong, $options);
         $this->addStandardTab('NetworkPort_Vlan', $ong, $options);
+        $this->addStandardTab('Lock', $ong, $options);
         $this->addStandardTab('Log', $ong, $options);
         $this->addStandardTab('NetworkPortConnectionLog', $ong, $options);
         $this->addStandardTab('NetworkPortInstantiation', $ong, $options);
@@ -576,9 +586,12 @@ class NetworkPort extends CommonDBChild
      * @param integer $ID ID of the port
      *
      * @return boolean true on success
+     *
+     * @FIXME Deprecate this method in GLPI 10.1, it is not used.
      **/
     public function resetConnections($ID)
     {
+        return false;
     }
 
 
@@ -642,6 +655,15 @@ class NetworkPort extends CommonDBChild
         $itemtype = $item->getType();
         $items_id = $item->getField('id');
 
+        //from dynamic asset, deleted items are displayed from lock tab
+        //from manual asset, deleted items are always displayed (with is_deleted column)
+        $deleted_criteria = [];
+        if ($item->isDynamic()) {
+            $deleted_criteria = [
+                "is_deleted" => 0
+            ];
+        }
+
         if (
             !NetworkEquipment::canView()
             || !$item->can($items_id, READ)
@@ -692,7 +714,7 @@ class NetworkPort extends CommonDBChild
                         ['name' => null]
                     ]
                 ]
-            ]
+            ] + $deleted_criteria
         ];
 
         $ports_iterator = $DB->request($criteria);
@@ -868,7 +890,7 @@ class NetworkPort extends CommonDBChild
                 'items_id'  => $item->getID(),
                 'itemtype'  => $item->getType(),
                 'name'      => 'Management'
-            ]
+            ] + $deleted_criteria
         ];
 
         $mports_iterator = $DB->request($criteria);
@@ -963,6 +985,9 @@ class NetworkPort extends CommonDBChild
             foreach ($so as $option) {
                 if ($option['id'] == $dpref) {
                     switch ($dpref) {
+                        case 6:
+                            $output .= Dropdown::getYesNo($port['is_deleted']);
+                            break;
                         case 1:
                             if ($agg === true) {
                                 $td_class = 'aggregated';
@@ -1454,15 +1479,54 @@ class NetworkPort extends CommonDBChild
 
     public function getSpecificMassiveActions($checkitem = null)
     {
-
         $isadmin = $checkitem !== null && $checkitem->canUpdate();
         $actions = parent::getSpecificMassiveActions($checkitem);
+
+        //add purge action if main item is not dynamic
+        //NetworkPort delete / purge are handled a different way on dynamic asset (lock)
+        if (!$checkitem->isDynamic()) {
+            $actions['NetworkPort' . MassiveAction::CLASS_ACTION_SEPARATOR . 'purge']    = __('Delete permanently');
+        }
+
         if ($isadmin) {
             $vlan_prefix                    = 'NetworkPort_Vlan' . MassiveAction::CLASS_ACTION_SEPARATOR;
             $actions[$vlan_prefix . 'add']    = __('Associate a VLAN');
             $actions[$vlan_prefix . 'remove'] = __('Dissociate a VLAN');
         }
         return $actions;
+    }
+
+
+    public static function processMassiveActionsForOneItemtype(
+        MassiveAction $ma,
+        CommonDBTM $item,
+        array $ids
+    ) {
+        switch ($ma->getAction()) {
+            case 'purge':
+                foreach ($ids as $id) {
+                    if ($item->can($id, PURGE)) {
+                        // Only mark deletion for
+                        if (!$item->isDeleted()) {
+                            $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_KO);
+                            $ma->addMessage(sprintf(__('%1$s: %2$s'), $item->getLink(), __('Item need to be deleted first')));
+                        } else {
+                            $delete_array = ['id' => $id];
+
+                            if ($item->delete($delete_array, true)) {
+                                $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_OK);
+                            } else {
+                                $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_KO);
+                                $ma->addMessage($item->getErrorMessage(ERROR_ON_ACTION));
+                            }
+                        }
+                    } else {
+                        $ma->itemDone($item->getType(), $id, MassiveAction::ACTION_NORIGHT);
+                        $ma->addMessage($item->getErrorMessage(ERROR_RIGHT));
+                    }
+                }
+                return;
+        }
     }
 
 
@@ -1517,6 +1581,15 @@ class NetworkPort extends CommonDBChild
             'name'               => NetworkPortType::getTypeName(1),
             'datatype'           => 'itemtypename',
             'itemtype_list'      => 'networkport_instantiations',
+            'massiveaction'      => false
+        ];
+
+        $tab[] = [
+            'id'                 => '6',
+            'table'              => $this->getTable(),
+            'field'              => 'is_deleted',
+            'name'               => __('Deleted'),
+            'datatype'           => 'bool',
             'massiveaction'      => false
         ];
 
@@ -1626,17 +1699,14 @@ class NetworkPort extends CommonDBChild
             'joinparams' => ['beforejoin' => $netportjoin]
         ];
 
-        if (!defined('TU_USER')) {
-            $tab[] = [
-                'id'    => '39',
-                'table' => $this->getTable(),
-                'field' => 'noone',
-                'name' => __('Connected to'),
-                'nosearch' => true,
-                'nodisplay' => true,
-                'massiveaction' => false
-            ];
-        }
+        $tab[] = [
+            'id'    => '39',
+            'table' => $this->getTable(),
+            'field' => '_virtual_connected_to',
+            'name' => __('Connected to'),
+            'nosearch' => true,
+            'massiveaction' => false
+        ];
 
         $tab[] = [
             'id'    => '40',
@@ -1745,8 +1815,8 @@ class NetworkPort extends CommonDBChild
             || ($item->getType() == 'NetworkPort')
         ) {
             self::showForItem($item, $withtemplate);
-            return true;
         }
+        return true;
     }
 
 

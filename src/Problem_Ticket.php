@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,20 +17,23 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
+
+use Glpi\Application\View\TemplateRenderer;
 
 class Problem_Ticket extends CommonDBRelation
 {
@@ -293,28 +297,20 @@ class Problem_Ticket extends CommonDBRelation
         }
 
         if ($canedit) {
-            echo "<div class='firstbloc'>";
-            echo "<form name='changeticket_form$rand' id='changeticket_form$rand' method='post'
-               action='" . Toolbox::getItemTypeFormURL(__CLASS__) . "'>";
-
-            echo "<table class='tab_cadre_fixe'>";
-            echo "<tr class='tab_bg_2'><th colspan='2'>" . __('Add a ticket') . "</th></tr>";
-
-            echo "<tr class='tab_bg_2'><td class='right'>";
-            echo "<input type='hidden' name='problems_id' value='$ID'>";
-            Ticket::dropdown([
-                'used'        => $used,
-                'entity'      => $problem->getEntityID(),
-                'entity_sons' => $problem->isRecursive(),
-                'displaywith' => ['id'],
+            echo TemplateRenderer::getInstance()->render('components/form/link_existing_or_new.html.twig', [
+                'rand' => $rand,
+                'link_itemtype' => __CLASS__,
+                'source_itemtype' => Problem::class,
+                'source_items_id' => $ID,
+                'target_itemtype' => Ticket::class,
+                'dropdown_options' => [
+                    'entity'      => $problem->getEntityID(),
+                    'entity_sons' => $problem->isRecursive(),
+                    'used'        => $used,
+                    'displaywith' => ['id'],
+                ],
+                'create_link' => false
             ]);
-            echo "</td><td class='center'>";
-            echo "<input type='submit' name='add' value=\"" . _sx('button', 'Add') . "\" class='btn btn-primary'>";
-            echo "</td></tr>";
-
-            echo "</table>";
-            Html::closeForm();
-            echo "</div>";
         }
 
         echo "<div class='spaced'>";
@@ -404,32 +400,21 @@ class Problem_Ticket extends CommonDBRelation
             $used[$problem['id']] = $problem['id'];
         }
         if ($canedit) {
-            echo "<div class='firstbloc'>";
-            echo "<form name='problemticket_form$rand' id='problemticket_form$rand' method='post'
-                action='" . Toolbox::getItemTypeFormURL(__CLASS__) . "'>";
-
-            echo "<table class='tab_cadre_fixe'>";
-            echo "<tr class='tab_bg_2'><th colspan='3'>" . __('Add a problem') . "</th></tr>";
-            echo "<tr class='tab_bg_2'><td>";
-            echo "<input type='hidden' name='tickets_id' value='$ID'>";
-
-            Problem::dropdown([
-                'used'      => $used,
-                'entity'    => $ticket->getEntityID(),
-                'condition' => Problem::getOpenCriteria()
+            echo TemplateRenderer::getInstance()->render('components/form/link_existing_or_new.html.twig', [
+                'rand' => $rand,
+                'link_itemtype' => __CLASS__,
+                'source_itemtype' => Ticket::class,
+                'source_items_id' => $ID,
+                'target_itemtype' => Problem::class,
+                'dropdown_options' => [
+                    'entity'      => $ticket->getEntityID(),
+                    'entity_sons' => $ticket->isRecursive(),
+                    'condition'   => Problem::getOpenCriteria(),
+                    'used'        => $used,
+                    'displaywith' => ['id'],
+                ],
+                'create_link' => Session::haveRight(Problem::$rightname, CREATE)
             ]);
-            echo "</td><td class='center'>";
-            echo "<input type='submit' name='add' value=\"" . _sx('button', 'Add') . "\" class='btn btn-primary'>";
-            echo "</td><td>";
-            if (Session::haveRight('problem', CREATE)) {
-                echo "<a href='" . Toolbox::getItemTypeFormURL('Problem') . "?tickets_id=$ID'>";
-                echo __('Create a problem from this ticket');
-                echo "</a>";
-            }
-
-            echo "</td></tr></table>";
-            Html::closeForm();
-            echo "</div>";
         }
 
         echo "<div class='spaced'>";

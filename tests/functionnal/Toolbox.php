@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -242,6 +244,53 @@ class Toolbox extends DbTestCase
          ->variable(\Toolbox::jsonDecode($json, true))
          ->isIdenticalTo($expected);
     }
+
+
+    protected function isJSONProvider()
+    {
+        return [
+            [
+                '{"validJson":true}',
+                true
+            ], [
+                '{"invalidJson":true',
+                false
+            ], [
+                '"valid"',
+                true
+            ], [
+                'null',
+                true
+            ], [
+                1000,
+                true
+            ], [
+                [1, 2, 3],
+                false
+            ], [
+                (object) ['json' => true],
+                false
+            ], [
+                '{ bad content',
+                false
+            ], [
+                file_get_contents(GLPI_ROOT . '/vendor/glpi-project/inventory_format/examples/computer_1.json'),
+                true
+            ]
+        ];
+    }
+
+    /**
+     * @dataProvider isJsonProvider
+     */
+    public function testIsJSON($json, $expected)
+    {
+        $this
+         ->variable(\Toolbox::isJSON($json, true))
+         ->isIdenticalTo($expected);
+    }
+
+
 
     public function testInvalidJsonDecode()
     {
@@ -487,8 +536,9 @@ class Toolbox extends DbTestCase
             $item->fields['id'] = mt_rand(1, 50);
 
             $img_url = '/front/document.send.php?docid={docid}'; //{docid} to replace by generated doc id
-            if ($item instanceof \CommonITILObject) {
-                $img_url .= '&' . $item->getForeignKeyField() . '=' . $item->fields['id'];
+            if ($item instanceof \CommonDBTM) {
+                $img_url .= '&itemtype=' . $item->getType();
+                $img_url .= '&items_id=' . $item->fields['id'];
             }
 
             $data[] = [
@@ -548,10 +598,17 @@ class Toolbox extends DbTestCase
         $expected_url   = str_replace('{docid}', $doc_id, $expected_url);
         $expected_result = '<a href="' . $expected_url . '" target="_blank" ><img alt="' . $img_tag . '" width="10" src="' . $expected_url . '" /></a>';
 
-       // Processed data is expected to be escaped
-        $content_text = \Toolbox::addslashes_deep($content_text);
-        $expected_result = Sanitizer::encodeHtmlSpecialChars($expected_result);
+        // Processed data is expected to be sanitized, and expected result should remain sanitized
+        $this->string(
+            \Toolbox::convertTagToImage(Sanitizer::sanitize($content_text), $item, [$doc_id => ['tag' => $img_tag]])
+        )->isEqualTo(Sanitizer::sanitize($expected_result));
 
+        // Processed data may also be escaped using Toolbox::addslashes_deep(), and expected result should be escaped too
+        $this->string(
+            \Toolbox::convertTagToImage(\Toolbox::addslashes_deep($content_text), $item, [$doc_id => ['tag' => $img_tag]])
+        )->isEqualTo(\Toolbox::addslashes_deep($expected_result));
+
+        // Processed data may also be not sanitized, and expected result should not be sanitized
         $this->string(
             \Toolbox::convertTagToImage($content_text, $item, [$doc_id => ['tag' => $img_tag]])
         )->isEqualTo($expected_result);
@@ -566,7 +623,8 @@ class Toolbox extends DbTestCase
         $item->fields['id'] = mt_rand(1, 50);
 
         $img_url = '/front/document.send.php?docid={docid}'; //{docid} to replace by generated doc id
-        $img_url .= '&tickets_id=' . $item->fields['id'];
+        $img_url .= '&itemtype=' . $item->getType();
+        $img_url .= '&items_id=' . $item->fields['id'];
 
         return [
             [
@@ -605,10 +663,6 @@ class Toolbox extends DbTestCase
         $content_text   = '<img id="' . $img_tag . '" width="10" height="10" />';
         $expected_url   = str_replace('{docid}', $doc_id, $expected_url);
         $expected_result = '<a href="' . $expected_url . '" target="_blank" ><img alt="' . $img_tag . '" width="10" src="' . $expected_url . '" /></a>';
-
-       // Processed data is expected to be escaped
-        $content_text = \Toolbox::addslashes_deep($content_text);
-        $expected_result = Sanitizer::encodeHtmlSpecialChars($expected_result);
 
        // Save old config
         global $CFG_GLPI;
@@ -675,15 +729,24 @@ class Toolbox extends DbTestCase
         $content_text    = '';
         $expected_result = '';
         foreach ($doc_data as $doc_id => $doc) {
-            $expected_url    = '/front/document.send.php?docid=' . $doc_id . '&tickets_id=' . $item->fields['id'];
+            $expected_url    = '/front/document.send.php?docid=' . $doc_id;
+            $expected_url    .= '&itemtype=' . $item->getType();
+            $expected_url    .= '&items_id=' . $item->fields['id'];
             $content_text    .= '<img id="' . $doc['tag'] . '" width="10" height="10" />';
             $expected_result .= '<a href="' . $expected_url . '" target="_blank" ><img alt="' . $doc['tag'] . '" width="10" src="' . $expected_url . '" /></a>';
         }
 
-       // Processed data is expected to be escaped
-        $content_text = \Toolbox::addslashes_deep($content_text);
-        $expected_result = Sanitizer::encodeHtmlSpecialChars($expected_result);
+        // Processed data is expected to be sanitized, and expected result should remain sanitized
+        $this->string(
+            \Toolbox::convertTagToImage(Sanitizer::sanitize($content_text), $item, $doc_data)
+        )->isEqualTo(Sanitizer::sanitize($expected_result));
 
+        // Processed data may also be escaped using Toolbox::addslashes_deep(), and expected result should be escaped too
+        $this->string(
+            \Toolbox::convertTagToImage(\Toolbox::addslashes_deep($content_text), $item, $doc_data)
+        )->isEqualTo(\Toolbox::addslashes_deep($expected_result));
+
+        // Processed data may also be not sanitized, and expected result should not be sanitized
         $this->string(
             \Toolbox::convertTagToImage($content_text, $item, $doc_data)
         )->isEqualTo($expected_result);
@@ -720,20 +783,36 @@ class Toolbox extends DbTestCase
         $this->integer((int)$doc_id_2)->isGreaterThan(0);
 
         $content_text    = '<img id="' . $img_tag . '" width="10" height="10" />';
-        $expected_url_1    = '/front/document.send.php?docid=' . $doc_id_1 . '&tickets_id=' . $item->fields['id'];
+        $expected_url_1    = '/front/document.send.php?docid=' . $doc_id_1;
+        $expected_url_1     .= '&itemtype=' . $item->getType();
+        $expected_url_1     .= '&items_id=' . $item->fields['id'];
         $expected_result_1 = '<a href="' . $expected_url_1 . '" target="_blank" ><img alt="' . $img_tag . '" width="10" src="' . $expected_url_1 . '" /></a>';
-        $expected_url_2    = '/front/document.send.php?docid=' . $doc_id_2 . '&tickets_id=' . $item->fields['id'];
+        $expected_url_2    = '/front/document.send.php?docid=' . $doc_id_2;
+        $expected_url_2     .= '&itemtype=' . $item->getType();
+        $expected_url_2     .= '&items_id=' . $item->fields['id'];
         $expected_result_2 = '<a href="' . $expected_url_2 . '" target="_blank" ><img alt="' . $img_tag . '" width="10" src="' . $expected_url_2 . '" /></a>';
 
-       // Processed data is expected to be escaped
-        $content_text = \Toolbox::addslashes_deep($content_text);
-        $expected_result_1 = Sanitizer::encodeHtmlSpecialChars($expected_result_1);
-        $expected_result_2 = Sanitizer::encodeHtmlSpecialChars($expected_result_2);
 
+        // Processed data is expected to be sanitized, and expected result should remain sanitized
+        $this->string(
+            \Toolbox::convertTagToImage(Sanitizer::sanitize($content_text), $item, [$doc_id_1 => ['tag' => $img_tag]])
+        )->isEqualTo(Sanitizer::sanitize($expected_result_1));
+        $this->string(
+            \Toolbox::convertTagToImage(Sanitizer::sanitize($content_text), $item, [$doc_id_2 => ['tag' => $img_tag]])
+        )->isEqualTo(Sanitizer::sanitize($expected_result_2));
+
+        // Processed data may also be escaped using Toolbox::addslashes_deep(), and expected result should be escaped too
+        $this->string(
+            \Toolbox::convertTagToImage(\Toolbox::addslashes_deep($content_text), $item, [$doc_id_1 => ['tag' => $img_tag]])
+        )->isEqualTo(\Toolbox::addslashes_deep($expected_result_1));
+        $this->string(
+            \Toolbox::convertTagToImage(\Toolbox::addslashes_deep($content_text), $item, [$doc_id_2 => ['tag' => $img_tag]])
+        )->isEqualTo(\Toolbox::addslashes_deep($expected_result_2));
+
+        // Processed data may also be not sanitized, and expected result should not be sanitized
         $this->string(
             \Toolbox::convertTagToImage($content_text, $item, [$doc_id_1 => ['tag' => $img_tag]])
         )->isEqualTo($expected_result_1);
-
         $this->string(
             \Toolbox::convertTagToImage($content_text, $item, [$doc_id_2 => ['tag' => $img_tag]])
         )->isEqualTo($expected_result_2);
@@ -762,14 +841,23 @@ class Toolbox extends DbTestCase
 
         $content_text     = '<img id="' . $img_tag . '" width="10" height="10" />';
         $content_text    .= $content_text;
-        $expected_url     = '/front/document.send.php?docid=' . $doc_id . '&tickets_id=' . $item->fields['id'];
+        $expected_url     = '/front/document.send.php?docid=' . $doc_id;
+        $expected_url    .= '&itemtype=' . $item->getType();
+        $expected_url    .= '&items_id=' . $item->fields['id'];
         $expected_result  = '<a href="' . $expected_url . '" target="_blank" ><img alt="' . $img_tag . '" width="10" src="' . $expected_url . '" /></a>';
         $expected_result .= $expected_result;
 
-       // Processed data is expected to be escaped
-        $content_text = \Toolbox::addslashes_deep($content_text);
-        $expected_result = Sanitizer::encodeHtmlSpecialChars($expected_result);
+        // Processed data is expected to be sanitized, and expected result should remain sanitized
+        $this->string(
+            \Toolbox::convertTagToImage(Sanitizer::sanitize($content_text), $item, [$doc_id => ['tag' => $img_tag]])
+        )->isEqualTo(Sanitizer::sanitize($expected_result));
 
+        // Processed data may also be escaped using Toolbox::addslashes_deep(), and expected result should be escaped too
+        $this->string(
+            \Toolbox::convertTagToImage(\Toolbox::addslashes_deep($content_text), $item, [$doc_id => ['tag' => $img_tag]])
+        )->isEqualTo(\Toolbox::addslashes_deep($expected_result));
+
+        // Processed data may also be not sanitized, and expected result should not be sanitized
         $this->string(
             \Toolbox::convertTagToImage($content_text, $item, [$doc_id => ['tag' => $img_tag]])
         )->isEqualTo($expected_result);
@@ -1326,6 +1414,21 @@ class Toolbox extends DbTestCase
             'size'     => "2TO",
             'expected' => 2097152,
         ];
+
+        yield [
+            'size'     => '>200',
+            'expected' => '>200',
+        ];
+
+        yield [
+            'size'     => '200AA',
+            'expected' => '200AA',
+        ];
+
+        yield [
+            'size'     => '200 AA',
+            'expected' => '200 AA',
+        ];
     }
 
     /**
@@ -1342,5 +1445,90 @@ class Toolbox extends DbTestCase
     {
         $result = \Toolbox::getMioSizeFromString($size);
         $this->variable($result)->isEqualTo($expected);
+    }
+
+    protected function safeUrlProvider(): iterable
+    {
+        // Invalid URLs are refused
+        yield [
+            'url'      => '',
+            'expected' => false,
+        ];
+        yield [
+            'url'      => ' ',
+            'expected' => false,
+        ];
+
+        // Invalid schemes are refused
+        yield [
+            'url'      => 'file://tmp/test',
+            'expected' => false,
+        ];
+        yield [
+            'url'      => 'test://localhost/',
+            'expected' => false,
+        ];
+
+        // Local file are refused
+        yield [
+            'url'      => '//tmp/test',
+            'expected' => false,
+        ];
+
+        // http, https and feed URLs are accepted, unless they contains a user or port information
+        foreach (['http', 'https', 'feed'] as $scheme) {
+            foreach (['', '/', '/path/to/feed.php'] as $path) {
+                yield [
+                    'url'      => sprintf('%s://localhost%s', $scheme, $path),
+                    'expected' => true,
+                ];
+                yield [
+                    'url'      => sprintf('%s://localhost:8080%s', $scheme, $path),
+                    'expected' => false,
+                ];
+                yield [
+                    'url'      => sprintf('%s://test@localhost%s', $scheme, $path),
+                    'expected' => false,
+                ];
+                yield [
+                    'url'      => sprintf('%s://test:pass@localhost%s', $scheme, $path),
+                    'expected' => false,
+                ];
+            }
+        }
+
+        // Custom allowlist with multiple entries
+        $custom_allowlist = [
+            '|^https://\w+:[^/]+@calendar.mydomain.tld/|',
+            '|//intra.mydomain.tld/|',
+        ];
+        yield [
+            'url'       => 'https://calendar.external.tld/',
+            'expected'  => false,
+            'allowlist' => $custom_allowlist,
+        ];
+        yield [
+            'url'       => 'https://user:pass@calendar.mydomain.tld/',
+            'expected'  => true, // validates first item of allowlist
+            'allowlist' => $custom_allowlist,
+        ];
+        yield [
+            'url'       => 'http://intra.mydomain.tld/news.feed.php',
+            'expected'  => true, // validates second item of allowlist
+            'allowlist' => $custom_allowlist,
+        ];
+    }
+
+
+    /**
+     * @dataProvider safeUrlProvider
+     */
+    public function testIsUrlSafe(string $url, bool $expected, ?array $allowlist = null): void
+    {
+        $params = [$url];
+        if ($allowlist !== null) {
+            $params[] = $allowlist;
+        }
+        $this->boolean(call_user_func_array('Toolbox::isUrlSafe', $params))->isEqualTo($expected);
     }
 }

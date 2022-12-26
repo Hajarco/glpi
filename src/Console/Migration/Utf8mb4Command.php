@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -36,7 +38,6 @@ namespace Glpi\Console\Migration;
 use DBConnection;
 use Glpi\Console\AbstractCommand;
 use Glpi\System\Requirement\DbConfiguration;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -157,35 +158,29 @@ class Utf8mb4Command extends AbstractCommand
                 )
             );
 
+            $this->warnAboutExecutionTime();
             $this->askForConfirmation();
 
-           // Early update property to prevent warnings related to bad collation detection.
+            // Early update property to prevent warnings related to bad collation detection.
             $this->db->use_utf8mb4 = true;
 
-            $progress_bar = new ProgressBar($this->output);
+            $progress_message = function (string $table) {
+                return sprintf(__('Migrating table "%s"...'), $table);
+            };
 
-            foreach ($progress_bar->iterate($tables) as $table) {
-                $this->writelnOutputWithProgressBar(
-                    sprintf(__('Migrating table "%s"...'), $table),
-                    $progress_bar,
-                    OutputInterface::VERBOSITY_VERY_VERBOSE
-                );
-
+            foreach ($this->iterate($tables, $progress_message) as $table) {
                 $result = $this->db->query(
-                    sprintf('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci', $table)
+                    sprintf('ALTER TABLE %s CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci', $this->db->quoteName($table))
                 );
 
                 if (!$result) {
-                    $this->writelnOutputWithProgressBar(
+                    $this->outputMessage(
                         sprintf(__('<error>Error migrating table "%s".</error>'), $table),
-                        $progress_bar,
                         OutputInterface::VERBOSITY_QUIET
                     );
                     $errors = true;
                 }
             }
-
-            $this->output->write(PHP_EOL);
         }
 
         if (!DBConnection::updateConfigProperty(DBConnection::PROPERTY_USE_UTF8MB4, true)) {
@@ -197,7 +192,7 @@ class Utf8mb4Command extends AbstractCommand
 
         if ($errors) {
             throw new \Glpi\Console\Exception\EarlyExitException(
-                '<error>' . __('Errors occured during migration.') . '</error>',
+                '<error>' . __('Errors occurred during migration.') . '</error>',
                 self::ERROR_MIGRATION_FAILED_FOR_SOME_TABLES
             );
         }

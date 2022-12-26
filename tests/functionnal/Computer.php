@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -46,7 +48,7 @@ class Computer extends DbTestCase
         return $string;
     }
 
-    private function getNewComputer()
+    private function getNewComputer(): \Computer
     {
         $computer = getItemByTypeName('Computer', '_test_pc01');
         $fields   = $computer->fields;
@@ -365,7 +367,7 @@ class Computer extends DbTestCase
             }
         )->error()
          ->withType(E_USER_WARNING)
-         ->withMessage('getFromDBByCrit expects to get one result, 8 found in query "SELECT `id` FROM `glpi_computers` WHERE `name` LIKE \'_test%\'".')
+         ->withMessage('getFromDBByCrit expects to get one result, 9 found in query "SELECT `id` FROM `glpi_computers` WHERE `name` LIKE \'_test%\'".')
          ->exists();
     }
 
@@ -574,6 +576,49 @@ class Computer extends DbTestCase
         $this->string($computer->fields['name'])->isEqualTo('testCloneWithSpecificName');
     }
 
+    public function testClonedRelationNamesFromTemplate()
+    {
+        $this->login();
+        $this->setEntity('_test_root_entity', true);
+
+        /** @var \Computer $computer */
+        $computer_template = new \Computer();
+        $templates_id = $computer_template->add([
+            'template_name' => __FUNCTION__ . '_template',
+            'is_template' => 1
+        ]);
+        $this->integer($templates_id)->isGreaterThan(0);
+
+        // Add a network port to the template
+        $networkPort = new \NetworkPort();
+        $networkports_id = $networkPort->add([
+            'name' => __FUNCTION__,
+            'itemtype' => 'Computer',
+            'items_id' => $templates_id,
+            'instantiation_type' => 'NetworkPortEthernet',
+            'logical_number' => 0,
+            'items_devicenetworkcards_id' => 0,
+            '_create_children' => true
+        ]);
+        $this->integer($networkports_id)->isGreaterThan(0);
+
+        // Create computer from template
+        $computer = new \Computer();
+        $computers_id = $computer->add([
+            'name' => __FUNCTION__,
+            'id' => $templates_id
+        ]);
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        // Get network port from computer
+        $this->boolean($networkPort->getFromDBByCrit([
+            'itemtype' => 'Computer',
+            'items_id' => $computers_id,
+        ]))->isTrue();
+        // Network port name should not have a "copy" suffix
+        $this->string($networkPort->fields['name'])->isEqualTo(__FUNCTION__);
+    }
+
     public function testCloneWithAutoName()
     {
         /** @var \Computer $computer */
@@ -673,5 +718,98 @@ class Computer extends DbTestCase
         if (isset($_SESSION['saveInput']) && is_array($_SESSION['saveInput'])) {
             $this->array($_SESSION['saveInput'])->notHasKey('Computer');
         }
+    }
+
+    public function testGetInventoryAgent(): void
+    {
+        $computer = $this->getNewComputer();
+        $printer1 = $this->getNewPrinter();
+        $this->createItem(
+            \Computer_Item::class,
+            [
+                'computers_id' => $computer->fields['id'],
+                'itemtype'     => \Printer::class,
+                'items_id'     => $printer1->fields['id'],
+            ]
+        );
+        $printer2 = $this->getNewPrinter();
+        $this->createItem(
+            \Computer_Item::class,
+            [
+                'computers_id' => $computer->fields['id'],
+                'itemtype'     => \Printer::class,
+                'items_id'     => $printer2->fields['id'],
+            ]
+        );
+
+        $computer_agent = $computer->getInventoryAgent();
+        $this->variable($computer_agent)->isNull();
+
+        $agenttype_id = getItemByTypeName(\AgentType::class, 'Core', true);
+
+        $agent1 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Computer::class,
+                'items_id'     => $computer->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('yesterday')),
+            ]
+        );
+
+        $agent2 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Computer::class,
+                'items_id'     => $computer->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('last week')),
+            ]
+        );
+
+        $agent3 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Printer::class,
+                'items_id'     => $printer1->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('last hour')),
+            ]
+        );
+
+        $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Printer::class,
+                'items_id'     => $printer2->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('yesterday')),
+            ]
+        );
+
+        // most recent agent directly linked
+        $computer_agent = $computer->getInventoryAgent();
+        $this->object($computer_agent)->isInstanceOf(\Agent::class);
+        $this->array($computer_agent->fields)->isEqualTo($agent1->fields);
+
+        $this->boolean($agent1->delete(['id' => $agent1->fields['id']]))->isTrue();
+
+        // most recent agent directly linked
+        $computer_agent = $computer->getInventoryAgent();
+        $this->object($computer_agent)->isInstanceOf(\Agent::class);
+        $this->array($computer_agent->fields)->isEqualTo($agent2->fields);
+
+        $this->boolean($agent2->delete(['id' => $agent2->fields['id']]))->isTrue();
+
+        // most recent agent found from linked items, as there is no more agent linked directly
+        $computer_agent = $computer->getInventoryAgent();
+        $this->object($computer_agent)->isInstanceOf(\Agent::class);
+        $printer1_agent = $printer1->getInventoryAgent();
+        $this->object($printer1_agent)->isInstanceOf(\Agent::class);
+        $this->array($computer_agent->fields)->isEqualTo($printer1_agent->fields);
     }
 }

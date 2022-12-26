@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -91,6 +93,12 @@ class AuthLDAP extends CommonDBTM
      * @var integer
      */
     const DELETED_USER_DISABLEANDWITHDRAWDYNINFO = 4;
+
+    /**
+     * Deleted user strategy: disable user and withdraw groups.
+     * @var integer
+     */
+    const DELETED_USER_DISABLEANDDELETEGROUPS = 5;
 
     /**
      * Restored user strategy: Make no change to GLPI user
@@ -891,7 +899,7 @@ class AuthLDAP extends CommonDBTM
         echo "<tr class='tab_bg_2'><td>" . __('Comments') . "</td>";
         echo "<td><input type='text' class='form-control' name='comment_field' value='" . $this->fields["comment_field"] . "'>";
         echo "</td>";
-        echo "<td>" . __('Administrative number') . "</td>";
+        echo "<td>" . _x('user', 'Administrative number') . "</td>";
         echo "<td>";
         echo "<input type='text' class='form-control' name='registration_number_field' value='" .
              $this->fields["registration_number_field"] . "'>";
@@ -1432,7 +1440,7 @@ class AuthLDAP extends CommonDBTM
         }
 
         if (!isset($_SESSION[$filter_var]) || ($_SESSION[$filter_var] == '')) {
-            $_SESSION[$filter_var] = $config_ldap->fields[$filter_name1];
+            $_SESSION[$filter_var] = Sanitizer::unsanitize($config_ldap->fields[$filter_name1]);
         }
 
         echo "<div class='card'>";
@@ -1442,21 +1450,21 @@ class AuthLDAP extends CommonDBTM
                                            : __('Filter to search in groups')) . "</td>";
 
         echo "<td>";
-        echo "<input type='text' name='ldap_filter' value='" . $_SESSION[$filter_var] . "' size='70'>";
+        echo "<input type='text' name='ldap_filter' value='" . htmlspecialchars($_SESSION[$filter_var], ENT_QUOTES) . "' size='70'>";
        //Only display when looking for groups in users AND groups
         if (
             !$users
             && ($config_ldap->fields["group_search_type"] == self::GROUP_SEARCH_BOTH)
         ) {
             if (!isset($_SESSION["ldap_group_filter2"]) || ($_SESSION["ldap_group_filter2"] == '')) {
-                $_SESSION["ldap_group_filter2"] = $config_ldap->fields[$filter_name2];
+                $_SESSION["ldap_group_filter2"] = Sanitizer::unsanitize($config_ldap->fields[$filter_name2]);
             }
             echo "</td></tr>";
 
             echo "<tr><td>" . __('Search filter for users') . "</td";
 
             echo "<td>";
-            echo "<input type='text' name='ldap_filter2' value='" . $_SESSION["ldap_group_filter2"] . "'
+            echo "<input type='text' name='ldap_filter2' value='" . htmlspecialchars($_SESSION["ldap_group_filter2"], ENT_QUOTES) . "'
                 size='70'></td></tr>";
         }
 
@@ -1904,10 +1912,15 @@ class AuthLDAP extends CommonDBTM
                              continue;
                         }
 
-                        $user_infos[$uid]["timestamp"] = self::ldapStamp2UnixStamp(
-                            $info[$ligne]['modifytimestamp'][0],
-                            $config_ldap->fields['time_offset']
-                        );
+                        if (isset($info[$ligne]['modifytimestamp'])) {
+                            $user_infos[$uid]["timestamp"] = self::ldapStamp2UnixStamp(
+                                $info[$ligne]['modifytimestamp'][0],
+                                $config_ldap->fields['time_offset']
+                            );
+                        } else {
+                            $user_infos[$uid]["timestamp"] = '';
+                        }
+
                         $user_infos[$uid]["user_dn"] = $info[$ligne]['dn'];
                         $user_infos[$uid][$field_for_sync] = $uid;
                         if ($config_ldap->isSyncFieldEnabled()) {
@@ -1919,10 +1932,14 @@ class AuthLDAP extends CommonDBTM
                              $ldap_users[$uid] = $uid;
                         } else {
                            //If ldap synchronisation
-                            $ldap_users[$uid] = self::ldapStamp2UnixStamp(
-                                $info[$ligne]['modifytimestamp'][0],
-                                $config_ldap->fields['time_offset']
-                            );
+                            if (isset($info[$ligne]['modifytimestamp'])) {
+                                $ldap_users[$uid] = self::ldapStamp2UnixStamp(
+                                    $info[$ligne]['modifytimestamp'][0],
+                                    $config_ldap->fields['time_offset']
+                                );
+                            } else {
+                                $ldap_users[$uid] = '';
+                            }
                             $user_infos[$uid]["name"] = $info[$ligne][$login_field][0];
                         }
                     }
@@ -2296,13 +2313,13 @@ class AuthLDAP extends CommonDBTM
                               $dn_index,
                               ['massive_tags'  => 'select_item_child_entities',
                                   'name'          => "ldap_import_recursive[$dn_index]",
-                                  'specific_tags' => ['data-glpicore-ma-tags' => 'entities_id']
+                                  'specific_tags' => ['data-glpicore-ma-tags' => 'common']
                               ]
                           );
                             echo "</td>";
                     } else {
                         echo Html::hidden("ldap_import_recursive[$dn_index]", ['value'                 => 0,
-                            'data-glpicore-ma-tags' => 'entities_id'
+                            'data-glpicore-ma-tags' => 'common'
                         ]);
                     }
                     echo "</tr>";
@@ -2434,19 +2451,12 @@ class AuthLDAP extends CommonDBTM
                 }
             }
 
-            if ($order == 'DESC') {
-                function local_cmp($b, $a)
-                {
-                    return strcasecmp($a['cn'], $b['cn']);
+            usort(
+                $groups,
+                function ($a, $b) use ($order) {
+                    return $order == 'DESC' ? strcasecmp($b['cn'], $a['cn']) : strcasecmp($a['cn'], $b['cn']);
                 }
-
-            } else {
-                function local_cmp($a, $b)
-                {
-                    return strcasecmp($a['cn'], $b['cn']);
-                }
-            }
-            usort($groups, 'local_cmp');
+            );
         }
         return $groups;
     }
@@ -2507,10 +2517,10 @@ class AuthLDAP extends CommonDBTM
         if ($filter == '') {
             if ($search_in_groups) {
                 $filter = (!empty($config_ldap->fields['group_condition'])
-                       ? $config_ldap->fields['group_condition'] : "(objectclass=*)");
+                       ? Sanitizer::unsanitize($config_ldap->fields['group_condition']) : "(objectclass=*)");
             } else {
                 $filter = (!empty($config_ldap->fields['condition'])
-                       ? $config_ldap->fields['condition'] : "(objectclass=*)");
+                       ? Sanitizer::unsanitize($config_ldap->fields['condition']) : "(objectclass=*)");
             }
         }
         $cookie = '';
@@ -2761,7 +2771,7 @@ class AuthLDAP extends CommonDBTM
                 'login_field'       => $search_parameters['fields'][$search_parameters['method']],
                 'search_parameters' => $search_parameters,
                 'user_params'       => $params,
-                'condition'         => $config_ldap->fields['condition']
+                'condition'         => Sanitizer::unsanitize($config_ldap->fields['condition'])
             ];
 
             try {
@@ -2850,9 +2860,8 @@ class AuthLDAP extends CommonDBTM
                 ErrorHandler::getInstance()->handleException($e);
                 return false;
             }
-        } else {
-            return false;
         }
+        return false;
     }
 
 
@@ -3668,7 +3677,7 @@ class AuthLDAP extends CommonDBTM
 
                     echo "<tr><td class='text-end'><label for='ldap_filter'>" . __('Search filter for users') . "</label></td><td colspan='3'>";
                     echo "<input type='text' class='form-control' id='ldap_filter' name='ldap_filter' value=\"" .
-                      $_SESSION['ldap_import']['ldap_filter'] . "\">";
+                      htmlspecialchars($_SESSION['ldap_import']['ldap_filter'], ENT_QUOTES) . "\">";
                     echo "</td></tr>";
                 }
                 break;
@@ -4018,6 +4027,7 @@ class AuthLDAP extends CommonDBTM
             self::DELETED_USER_WITHDRAWDYNINFO           => __('Withdraw dynamic authorizations and groups'),
             self::DELETED_USER_DISABLE                   => __('Disable'),
             self::DELETED_USER_DISABLEANDWITHDRAWDYNINFO => __('Disable') . ' + ' . __('Withdraw dynamic authorizations and groups'),
+            self::DELETED_USER_DISABLEANDDELETEGROUPS => __('Disable') . ' + ' . __('Withdraw groups'),
         ];
     }
 
@@ -4300,6 +4310,9 @@ class AuthLDAP extends CommonDBTM
      */
     public function isSyncFieldUsed()
     {
+        if ($this->getID() <= 0) {
+            return false;
+        }
         $count = countElementsInTable(
             'glpi_users',
             [

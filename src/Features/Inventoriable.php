@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,24 +17,26 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace Glpi\Features;
 
 use Agent;
+use AutoUpdateSystem;
 use CommonDBTM;
 use Computer;
 use Computer_Item;
@@ -73,7 +76,7 @@ trait Inventoriable
 
         if ($this->isField('autoupdatesystems_id')) {
             $source = new \AutoUpdateSystem();
-            $source->getFromDBByCrit(['name' => 'GLPI Native Inventory']);
+            $source->getFromDBByCrit(['name' => AutoUpdateSystem::NATIVE_INVENTORY]);
 
             if (
                 !$this->isDynamic()
@@ -242,52 +245,74 @@ JAVASCRIPT;
     {
         global $DB;
 
-        $agent = new Agent();
+        $agent = $this->getMostRecentAgent([
+            'itemtype' => $this->getType(),
+            'items_id' => $this->getID(),
+        ]);
+
+        if (
+            $agent === null
+            && $this instanceof DatabaseInstance
+            && !empty($this->fields['itemtype'])
+            && !empty($this->fields['items_id'])
+        ) {
+            // if no agent has been found, check if there is an agent linked to database host asset
+            $agent = $this->getMostRecentAgent([
+                'itemtype' => $this->fields['itemtype'],
+                'items_id' => $this->fields['items_id'],
+            ]);
+        } elseif (
+            $agent === null
+            && $this instanceof Computer
+        ) {
+            // if no agent has been found, check if there is are linked items, and find most recent agent
+            $relations_iterator = $DB->request(
+                [
+                    'SELECT' => ['itemtype', 'items_id'],
+                    'FROM'   => Computer_Item::getTable(),
+                ]
+            );
+            if (count($relations_iterator) > 0) {
+                $conditions = ['OR' => []];
+                foreach ($relations_iterator as $relation_data) {
+                    $conditions['OR'][] = [
+                        'itemtype' => $relation_data['itemtype'],
+                        'items_id' => $relation_data['items_id'],
+                    ];
+                }
+                $agent = $this->getMostRecentAgent($conditions);
+            }
+        }
+
+        $this->agent = $agent;
+
+        return $this->agent;
+    }
+
+    /**
+     * Get most recent agent corresponding to given conditions.
+     *
+     * @param array $conditions
+     *
+     * @return Agent|null
+     */
+    private function getMostRecentAgent(array $conditions): ?Agent
+    {
+        global $DB;
+
         $iterator = $DB->request([
             'SELECT'    => ['id'],
             'FROM'      => Agent::getTable(),
-            'WHERE'     => [
-                'itemtype' => $this->getType(),
-                'items_id' => $this->fields['id']
-            ],
+            'WHERE'     => $conditions,
             'ORDERBY'   => ['last_contact DESC'],
             'LIMIT'     => 1
         ]);
-
-        $has_agent = false;
-        if (count($iterator)) {
-            $has_agent = true;
-            $agent->getFromDB($iterator->current()['id']);
+        if (count($iterator) === 0) {
+            return null;
         }
 
-       //if no agent has been found, check if there is a linked item for databases
-        if (!$has_agent && $this instanceof DatabaseInstance) {
-            if (!empty($this->fields['itemtype'] && !empty($this->fields['items_id']))) {
-                $has_agent = $agent->getFromDBByCrit([
-                    'itemtype' => $this->fields['itemtype'],
-                    'items_id' => $this->fields['items_id']
-                ]);
-            }
-        }
-
-       //if no agent has been found, check if there is a linked item, and find its agent
-        if (!$has_agent && $this instanceof Computer) {
-            $citem = new Computer_Item();
-            $has_relation = $citem->getFromDBByCrit([
-                'itemtype' => $this->getType(),
-                'items_id' => $this->fields['id']
-            ]);
-            if ($has_relation) {
-                $has_agent = $agent->getFromDBByCrit([
-                    'itemtype' => Computer::getType(),
-                    'items_id' => $citem->fields['computers_id']
-                ]);
-            }
-        }
-
-        if ($has_agent) {
-            $this->agent = $agent;
-        }
-        return $this->agent;
+        $agent = new Agent();
+        $agent->getFromDB($iterator->current()['id']);
+        return $agent;
     }
 }

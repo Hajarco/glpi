@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,24 +17,30 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace tests\units\Glpi\Inventory;
 
 use InventoryTestCase;
+use Item_OperatingSystem;
+use OperatingSystem;
+use OperatingSystemArchitecture;
+use OperatingSystemServicePack;
+use OperatingSystemVersion;
 use wapmorgan\UnifiedArchive\UnifiedArchive;
 
 class Inventory extends InventoryTestCase
@@ -93,6 +100,7 @@ class Inventory extends InventoryTestCase
             'date_creation' => $computer->fields['date_creation'],
             'is_recursive' => 0,
             'last_inventory_update' => $computer->fields['last_inventory_update'],
+            'last_boot' => '2020-06-09 07:58:08',
         ];
         $this->array($computer->fields)->isIdenticalTo($expected);
 
@@ -121,7 +129,8 @@ class Inventory extends InventoryTestCase
             'items_id' => $computer->fields['id'],
             'remoteid' => '123456789',
             'type' => 'teamviewer',
-            'is_dynamic' => 1
+            'is_dynamic' => 1,
+            'is_deleted' => 0
         ]);
 
         //connections
@@ -134,6 +143,10 @@ class Inventory extends InventoryTestCase
         $mmanuf = $DB->request(['FROM' => \Manufacturer::getTable(), 'WHERE' => ['name' => 'Sharp Corporation']])->current();
         $this->array($mmanuf);
         $manufacturers_id = $mmanuf['id'];
+
+        $mmodel = $DB->request(['FROM' => \MonitorModel::getTable(), 'WHERE' => ['name' => 'DJCP6']])->current();
+        $this->array($mmodel);
+        $models_id = $mmodel['id'];
 
         $expected = [
             'id' => $monitor_link['id'],
@@ -157,7 +170,7 @@ class Inventory extends InventoryTestCase
             'have_displayport' => 0,
             'locations_id' => 0,
             'monitortypes_id' => 0,
-            'monitormodels_id' => 0,
+            'monitormodels_id' => $models_id,
             'manufacturers_id' => $manufacturers_id,
             'is_global' => 0,
             'is_deleted' => 0,
@@ -198,26 +211,34 @@ class Inventory extends InventoryTestCase
                 'name' => 'lo',
                 'instantiation_type' => 'NetworkPortEthernet',
                 'mac' => '00:00:00:00:00:00',
+                'ifinternalstatus' => '1',
             ], [
                 'logical_number' => 1,
                 'name' => 'enp57s0u1u4',
                 'instantiation_type' => 'NetworkPortEthernet',
                 'mac' => '00:e0:4c:68:01:db',
+                'ifstatus' => '1',
+                'ifinternalstatus' => '1',
             ], [
                 'logical_number' => 1,
                 'name' => 'wlp58s0',
                 'instantiation_type' => 'NetworkPortWifi',
                 'mac' => '44:85:00:2b:90:bc',
+                'ifinternalstatus' => '1',
             ], [
                 'logical_number' => 0,
                 'name' => 'virbr0',
                 'instantiation_type' => 'NetworkPortEthernet',
                 'mac' => '52:54:00:fa:20:0e',
+                'ifstatus' => '2',
+                'ifinternalstatus' => '1',
             ], [
                 'logical_number' => 0,
                 'name' => 'virbr0-nic',
                 'instantiation_type' => null,
                 'mac' => '52:54:00:fa:20:0e',
+                'ifstatus' => '2',
+                'ifinternalstatus' => '2',
             ]
         ];
 
@@ -479,7 +500,7 @@ class Inventory extends InventoryTestCase
                     'is_dynamic' => 1,
                     'entities_id' => 0,
                     'is_recursive' => 0,
-                    'serial' => null,
+                    'serial' => 'xyz',
                     'busID' => null,
                     'otherserial' => null,
                     'locations_id' => 0,
@@ -1082,14 +1103,15 @@ class Inventory extends InventoryTestCase
 
        //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
             ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
             ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
             ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
             ->string['tag']->isIdenticalTo('000005');
         $this->array($metadata['provider'])->hasSize(10);
 
-       //check created agent
+        //check created agent
         $agenttype = $DB->request(['FROM' => \AgentType::getTable(), 'WHERE' => ['name' => 'Core']])->current();
         $agents = $DB->request(['FROM' => \Agent::getTable()]);
         $this->integer(count($agents))->isIdenticalTo(1);
@@ -1099,7 +1121,9 @@ class Inventory extends InventoryTestCase
             ->string['name']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
             ->string['version']->isIdenticalTo('2.5.2-1.fc31')
             ->string['itemtype']->isIdenticalTo('Computer')
-            ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
+            ->string['tag']->isIdenticalTo('000005')
+            ->integer['agenttypes_id']->isIdenticalTo($agenttype['id'])
+            ->integer['items_id']->isGreaterThan(0);
 
         //check created computer
         $computer = $this->checkComputer1($agent['items_id']);
@@ -1157,10 +1181,11 @@ class Inventory extends InventoryTestCase
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
             ->string['deviceid']->isIdenticalTo('LF014-2017-02-20-12-19-56')
             ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.3.19')
             ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
             ->string['tag']->isIdenticalTo('000005');
         $this->array($metadata['provider'])->hasSize(9);
 
@@ -1174,6 +1199,7 @@ class Inventory extends InventoryTestCase
             ->string['name']->isIdenticalTo('LF014-2017-02-20-12-19-56')
             ->string['version']->isIdenticalTo('2.3.19')
             ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['tag']->isIdenticalTo('000005')
             ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
 
         //check matchedlogs
@@ -1262,6 +1288,7 @@ class Inventory extends InventoryTestCase
             'date_creation' => $computer->fields['date_creation'],
             'is_recursive' => 0,
             'last_inventory_update' => $computer->fields['last_inventory_update'],
+            'last_boot' => "2017-02-20 08:11:53",
         ];
         $this->array($computer->fields)->isIdenticalTo($expected);
 
@@ -1273,7 +1300,7 @@ class Inventory extends InventoryTestCase
         $expected = [
             'assocID' => $record['assocID'],
             'name' => 'Fedora release 25 (Twenty Five)',
-            'version' => null,
+            'version' => '25',
             'architecture' => 'x86_64',
             'servicepack' => null,
         ];
@@ -1474,6 +1501,7 @@ class Inventory extends InventoryTestCase
             'date_creation' => $computer->fields['date_creation'],
             'is_recursive' => 0,
             'last_inventory_update' => $computer->fields['last_inventory_update'],
+            'last_boot' => "2017-02-20 08:11:53",
         ];
         $this->array($computer->fields)->isIdenticalTo($expected);
 
@@ -1485,7 +1513,7 @@ class Inventory extends InventoryTestCase
         $expected = [
             'assocID' => $record['assocID'],
             'name' => 'Fedora release 25 (Twenty Five)',
-            'version' => null,
+            'version' => '25',
             'architecture' => 'x86_64',
             'servicepack' => null,
         ];
@@ -1578,11 +1606,12 @@ class Inventory extends InventoryTestCase
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
             ->string['deviceid']->isIdenticalTo('LF014-2017-02-20-12-19-56')
             ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.3.20')
             ->string['itemtype']->isIdenticalTo('Computer')
             ->string['tag']->isIdenticalTo('000005')
+            ->variable['port']->isIdenticalTo(null)
             ->string['action']->isIdenticalTo('inventory');
         ;
         $this->array($metadata['provider'])->hasSize(9);
@@ -1597,6 +1626,7 @@ class Inventory extends InventoryTestCase
             ->string['version']->isIdenticalTo('2.3.20')
             ->string['itemtype']->isIdenticalTo('Computer')
             ->integer['items_id']->isIdenticalTo($computers_id)
+            ->string['tag']->isIdenticalTo('000005')
             ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
 
         $computer = new \Computer();
@@ -1632,6 +1662,7 @@ class Inventory extends InventoryTestCase
             'date_creation' => $computer->fields['date_creation'],
             'is_recursive' => 0,
             'last_inventory_update' => $computer->fields['last_inventory_update'],
+            'last_boot' => "2017-06-08 07:06:47",
         ];
         $this->array($computer->fields)->isIdenticalTo($expected);
 
@@ -1643,7 +1674,7 @@ class Inventory extends InventoryTestCase
         $expected = [
             'assocID' => $record['assocID'],
             'name' => 'Fedora release 25 (Twenty Five)',
-            'version' => null,
+            'version' => '25',
             'architecture' => 'x86_64',
             'servicepack' => null,
         ];
@@ -1746,16 +1777,16 @@ class Inventory extends InventoryTestCase
             'OFFSET' => $nblogsnow,
         ]);
 
-        $this->integer(count($logs))->isIdenticalTo(4375);
+        $this->integer(count($logs))->isIdenticalTo(4448);
 
         $expected_types_count = [
-            0 => 3, //Agent version, disks usage
+            0 => 4, //Agent version, disks usage
             \Log::HISTORY_ADD_RELATION => 1, //new IPNetwork/IPAddress
             \Log::HISTORY_DEL_RELATION => 2,//monitor-computer relation
-            \Log::HISTORY_ADD_SUBITEM => 3243,//network port/name, ip address, VMs, Software
-            \Log::HISTORY_UPDATE_SUBITEM => 828,//disks usage, softwares updates
+            \Log::HISTORY_ADD_SUBITEM => 3247,//network port/name, ip address, VMs, Software
+            \Log::HISTORY_UPDATE_SUBITEM => 828,//disks usage, software updates
             \Log::HISTORY_DELETE_SUBITEM => 99,//networkport and networkname, Software?
-            \Log::HISTORY_CREATE_ITEM => 197, //virtual machines, os, manufacturer, net ports, net names, ...
+            \Log::HISTORY_CREATE_ITEM => 265, //virtual machines, os, manufacturer, net ports, net names, software category ...
             \Log::HISTORY_UPDATE_RELATION => 2,//kernel version
         ];
 
@@ -1783,7 +1814,7 @@ class Inventory extends InventoryTestCase
         $mlogs = new \RuleMatchedLog();
         $found = $mlogs->find(['NOT' => ['id' => array_keys($mrules_found)]]);
         $mrules_criteria['WHERE'] = ['NOT' => [\RuleMatchedLog::getTable() . '.id' => array_keys($mrules_found)]];
-        $this->array($found)->hasSize(5);
+        $this->array($found)->hasSize(3);
 
         $monitor_criteria = $mrules_criteria;
         $monitor_criteria['WHERE'][] = ['itemtype' => \Monitor::getType()];
@@ -1796,7 +1827,7 @@ class Inventory extends InventoryTestCase
         $computer_criteria['WHERE'][] = ['itemtype' => \Computer::getType()];
         $iterator = $DB->request($computer_criteria);
 
-        $this->integer(count($iterator))->isIdenticalTo(4);
+        $this->integer(count($iterator))->isIdenticalTo(2);
         foreach ($iterator as $rmlog) {
             $this->string($rmlog['name'])->isIdenticalTo('Computer update (by serial + uuid)');
             $this->integer($rmlog['items_id'])->isIdenticalTo($agent['items_id']);
@@ -1815,10 +1846,11 @@ class Inventory extends InventoryTestCase
         //check inventory metadata
         $metadata = $inventory->getMetadata();
 
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('foo')
          ->string['version']->isIdenticalTo('4.1')
          ->string['itemtype']->isIdenticalTo('NetworkEquipment')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('netinventory');
 
         global $DB;
@@ -1892,7 +1924,7 @@ class Inventory extends InventoryTestCase
             'cpu' => 4,
             'uptime' => '482 days, 05:42:18.50',
             'last_inventory_update' => $date_now,
-            'snmpcredentials_id' => 0,
+            'snmpcredentials_id' => 4,
         ];
         $this->array($equipment->fields)->isIdenticalTo($expected);
 
@@ -2139,7 +2171,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $iterator = $DB->request($unmanaged_criteria);
         $this->integer(count($iterator))->isIdenticalTo(5);
         foreach ($iterator as $unmanaged) {
-            $this->string($unmanaged['name'])->isIdenticalTo('Device import (by ip+ifdescr)');
+            $this->string($unmanaged['name'])->isIdenticalTo('Global import (by ip+ifdescr)');
             $this->string($unmanaged['method'])->isIdenticalTo(\Glpi\Inventory\Request::INVENT_QUERY);
         }
     }
@@ -2155,10 +2187,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         //check inventory metadata
         $metadata = $inventory->getMetadata();
 
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('3k-1-pa3.glpi-project.infra-2020-12-31-11-28-51')
          ->string['version']->isIdenticalTo('4.1')
          ->string['itemtype']->isIdenticalTo('NetworkEquipment')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('netinventory');
 
         global $DB;
@@ -2643,10 +2676,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         //check inventory metadata
         $metadata = $inventory->getMetadata();
 
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('HP-2530-48G-2020-12-31-11-28-51')
          ->string['version']->isIdenticalTo('2.5')
          ->string['itemtype']->isIdenticalTo('NetworkEquipment')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('netinventory');
 
         global $DB;
@@ -3315,10 +3349,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
        //check inventory metadata
         $metadata = $inventory->getMetadata();
 
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('CH-GV1-DSI-WLC-INSID-1-2020-12-31-11-28-51')
          ->string['version']->isIdenticalTo('4.1')
          ->string['itemtype']->isIdenticalTo('NetworkEquipment')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('netinventory');
 
         global $DB;
@@ -3352,7 +3387,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $this->array($cloc);
         $locations_id = $cloc['id'];
 
-       //check created equipments
+        //check created equipments
         $expected_eq_count = 302;
         $iterator = $DB->request([
             'FROM'   => \NetworkEquipment::getTable(),
@@ -3679,7 +3714,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $iterator = $DB->request($unmanaged_criteria);
         $this->integer(count($iterator))->isIdenticalTo(count($unmanageds));
         foreach ($iterator as $unmanaged) {
-            $this->string($unmanaged['name'])->isIdenticalTo('Device import (by ip+ifdescr)');
+            $this->string($unmanaged['name'])->isIdenticalTo('Global import (by ip+ifdescr)');
             $this->string($unmanaged['method'])->isIdenticalTo(\Glpi\Inventory\Request::INVENT_QUERY);
         }
     }
@@ -3695,10 +3730,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         //check inventory metadata
         $metadata = $inventory->getMetadata();
 
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('DGS-3420-52T-2020-12-31-11-28-51')
          ->string['version']->isIdenticalTo('4.1')
          ->string['itemtype']->isIdenticalTo('NetworkEquipment')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('netinventory');
 
         global $DB;
@@ -3990,10 +4026,9 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
     public function testImportRefusedFromAssetRules()
     {
-
         $rule = new \Rule();
 
-       //prepares needed rules id
+        //prepares needed rules id
         $this->boolean(
             $rule->getFromDBByCrit(['name' => 'Computer constraint (name)'])
         )->isTrue();
@@ -4034,11 +4069,12 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
          ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
          ->string['tag']->isIdenticalTo('000005')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('inventory');
         $this->array($metadata['provider'])->hasSize(10);
 
@@ -4053,6 +4089,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
          ->string['name']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
+         ->string['tag']->isIdenticalTo('000005')
          ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
 
         $computers_id = $agent['items_id'];
@@ -4204,11 +4241,12 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
          ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
          ->string['tag']->isIdenticalTo('000005')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('inventory');
         $this->array($metadata['provider'])->hasSize(10);
 
@@ -4223,6 +4261,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
          ->string['name']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
+         ->string['tag']->isIdenticalTo('000005')
          ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
 
         $computers_id = $agent['items_id'];
@@ -4261,7 +4300,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         $json_path = self::INV_FIXTURES . 'computer_1.json';
         $files = [
-            'importfile' => [
+            'inventory_file' => [
                 'name' => 'computer_1.json',
                 'type' => 'application/json',
                 'tmp_name' => $json_path,
@@ -4305,7 +4344,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         UnifiedArchive::archiveFiles($json_paths, self::INVENTORY_ARCHIVE_PATH);
 
         $files = [
-            'importfile' => [
+            'inventory_file' => [
                 'name' => 'to_inventory.zip',
                 'type' => 'application/zip',
                 'tmp_name' => self::INVENTORY_ARCHIVE_PATH,
@@ -4348,9 +4387,10 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
          ->string['itemtype']->isIdenticalTo('Computer')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('inventory');
 
         //check we add only one computer
@@ -4371,9 +4411,10 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
          ->string['itemtype']->isIdenticalTo('Computer')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('inventory');
 
         //check we add main computer and one computer per vm
@@ -4411,9 +4452,245 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             ]
         ]);
         $this->integer(count($iterator))->isIdenticalTo(1);
+    }
+
+    public function testUpdateVirtualMachines()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(GLPI_ROOT . '/tests/fixtures/inventories/lxc-server-1.json'));
+
+        $count_vms = count($json->content->virtualmachines);
+        $this->integer($count_vms)->isIdenticalTo(1);
+
+        $nb_vms = countElementsInTable(\ComputerVirtualMachine::getTable());
+        $nb_computers = countElementsInTable(\Computer::getTable());
+        $inventory = $this->doInventory($json);
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(5)
+            ->string['deviceid']->isIdenticalTo('lxc-server-2022-08-09-17-49-51')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['action']->isIdenticalTo('inventory');
+
+        //check created agent
+        $agenttype = $DB->request(['FROM' => \AgentType::getTable(), 'WHERE' => ['name' => 'Core']])->current();
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+        $this->array($agent)
+            ->string['deviceid']->isIdenticalTo('lxc-server-2022-08-09-17-49-51')
+            ->string['name']->isIdenticalTo('lxc-server-2022-08-09-17-49-51')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
+        $computers_id = $agent['items_id'];
+
+        //check we add only one computer
+        ++$nb_computers;
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers);
+        //check created vms
+        $nb_vms += $count_vms;
+        $this->integer(countElementsInTable(\ComputerVirtualMachine::getTable()))->isIdenticalTo($nb_vms);
+
+        $cvms = new \ComputerVirtualMachine();
+        $this->boolean($cvms->getFromDBByCrit(['computers_id' => $computers_id]))->isTrue();
+
+        $this->array($cvms->fields)
+            ->string['name']->isIdenticalTo('glpi-10-rc1')
+            ->integer['vcpu']->isIdenticalTo(2)
+            ->string['ram']->isIdenticalTo('2048')
+            ->string['uuid']->isIdenticalTo('487dfdb542a4bfb23670b8d4e76d8b6886c2ed35')
+        ;
+
+        //import again, RAM has changed
+        $json = json_decode(file_get_contents(GLPI_ROOT . '/tests/fixtures/inventories/lxc-server-1.json'));
+        $json_vm = $json->content->virtualmachines[0];
+        $json_vm->memory = 4096;
+        $json_vms = [$json_vm];
+        $json->content->virtualmachines = $json_vms;
+
+        $this->doInventory($json);
+
+        $this->boolean($cvms->getFromDBByCrit(['computers_id' => $computers_id]))->isTrue();
+
+        $this->array($cvms->fields)
+            ->string['name']->isIdenticalTo('glpi-10-rc1')
+            ->integer['vcpu']->isIdenticalTo(2)
+            ->string['ram']->isIdenticalTo('4096')
+            ->string['uuid']->isIdenticalTo('487dfdb542a4bfb23670b8d4e76d8b6886c2ed35')
+        ;
+    }
+
+    public function testRemoveVirtualMachines()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+
+        $count_vms = count($json->content->virtualmachines);
+        $this->integer($count_vms)->isIdenticalTo(6);
+
+        $nb_vms = countElementsInTable(\ComputerVirtualMachine::getTable());
+        $nb_computers = countElementsInTable(\Computer::getTable());
+
+        //change config to import vms as computers
+        $this->login();
+        $conf = new \Glpi\Inventory\Conf();
+        $this->boolean($conf->saveConf(['vm_as_computer' => 1]))->isTrue();
+        $this->logout();
+
+        //$json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+        $inventory = $this->doInventory($json);
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(5)
+            ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['action']->isIdenticalTo('inventory');
+
+        //check we add main computer and one computer per vm
+        //one does not have an uuid, so no computer is created.
+        ++$nb_computers;
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + $count_vms - 1);
+        //check created vms
+        $nb_vms += $count_vms;
+        $this->integer(countElementsInTable(\ComputerVirtualMachine::getTable()))->isIdenticalTo($nb_vms);
+
+        //remove postgres
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+        $vms = $json->content->virtualmachines;
+        unset($vms[4]);
+        $json->content->virtualmachines = $vms;
+
+        $this->doInventory($json);
+
+        //check there is one less vm
+        $nb_vms--;
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + $count_vms - 1);
+        $this->integer(countElementsInTable(\ComputerVirtualMachine::getTable()))->isIdenticalTo($nb_vms);
+
+        //check related computer has been put in trashbin
+        $iterator = $DB->request([
+            'FROM' => \Computer::getTable(),
+            'WHERE' => [
+                'name' => 'db',
+                'is_deleted' => 1
+            ]
+        ]);
+        $this->integer(count($iterator))->isIdenticalTo(1);
+    }
+
+    public function testRuleRefuseImportVirtualMachines()
+    {
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+
+        $count_vms = count($json->content->virtualmachines);
+        $this->integer($count_vms)->isIdenticalTo(6);
+
+        $nb_vms = countElementsInTable(\ComputerVirtualMachine::getTable());
+        $nb_computers = countElementsInTable(\Computer::getTable());
+
+        //change config to import vms as computers
+        $this->login();
+        $conf = new \Glpi\Inventory\Conf();
+        $this->boolean($conf->saveConf(['vm_as_computer' => 1]))->isTrue();
+        $this->logout();
+
+        //IMPORT rule to refuse "db" virtual machine
+        $criteria = [
+            [
+                'condition' => 0,
+                'criteria'  => 'itemtype',
+                'pattern'   => 'Computer',
+            ], [
+                'condition' => \RuleImportAsset::PATTERN_IS,
+                'criteria'  => 'name',
+                'pattern'   => 'db'
+            ]
+        ];
+        $action = [
+            'action_type' => 'assign',
+            'field'       => '_ignore_import',
+            'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_NO_IMPORT
+        ];
+        $rule = new \RuleImportAsset();
+        $collection = new \RuleImportAssetCollection();
+        $rulecriteria = new \RuleCriteria();
+
+        $input = [
+            'is_active' => 1,
+            'name'      => 'Refuse one VM creation',
+            'match'     => 'AND',
+            'sub_type'  => 'RuleImportAsset',
+        ];
+
+        $rules_id = $rule->add($input);
+        $this->integer($rules_id)->isGreaterThan(0);
+        $this->boolean($collection->moveRule($rules_id, 0, $collection::MOVE_BEFORE))->isTrue();
+
+        // Add criteria
+        foreach ($criteria as $crit) {
+            $input = [
+                'rules_id'  => $rules_id,
+                'criteria'  => $crit['criteria'],
+                'pattern'   => $crit['pattern'],
+                'condition' => $crit['condition'],
+            ];
+            $this->integer((int)$rulecriteria->add($input))->isGreaterThan(0);
+        }
+
+        // Add action
+        $ruleaction = new \RuleAction();
+        $input = [
+            'rules_id'    => $rules_id,
+            'action_type' => $action['action_type'],
+            'field'       => $action['field'],
+            'value'       => $action['value'],
+        ];
+        $this->integer((int)$ruleaction->add($input))->isGreaterThan(0);
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+        $inventory = $this->doInventory($json);
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(5)
+            ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['action']->isIdenticalTo('inventory');
+
+        global $DB;
+
+        //check created vms
+        $this->integer(countElementsInTable(\ComputerVirtualMachine::getTable()))->isIdenticalTo($count_vms);
+
+        //check we add main computer and one computer per vm
+        //one does not have an uuid, so no computer is created.
+        ++$nb_computers;
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + $count_vms - 2);
+    }
+
+    public function testImportDatabases()
+    {
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+
+        $nb_computers = countElementsInTable(\Computer::getTable());
+        $inventory = $this->doInventory($json);
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(5)
+            ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['action']->isIdenticalTo('inventory');
 
         //partial inventory: add databases
-        global $DB;
 
         //IMPORT rule
         $criteria = [
@@ -4429,7 +4706,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         ];
         $action = [
             'action_type' => 'assign',
-            'field'       => '_fusion',
+            'field'       => '_inventory',
             'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_IMPORT
         ];
         $rule = new \RuleImportAsset();
@@ -4486,7 +4763,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         ];
         $action = [
             'action_type' => 'assign',
-            'field'       => '_fusion',
+            'field'       => '_inventory',
             'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_IMPORT
         ];
         $rule = new \RuleImportAsset();
@@ -4530,7 +4807,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $this->doInventory($json);
 
         //check nothing has changed
-        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + $count_vms - 1);
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + 1);
 
         //check created databases & instances
         $this->integer(countElementsInTable(\DatabaseInstance::getTable()))->isIdenticalTo(2);
@@ -4542,7 +4819,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $this->doInventory($json);
 
         //check nothing has changed
-        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + $count_vms - 1);
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers + 1);
 
         //check created databases & instances
         $this->integer(countElementsInTable(\DatabaseInstance::getTable()))->isIdenticalTo(2);
@@ -4581,11 +4858,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $databases = $database->getDatabases();
         $this->array($databases)->hasSize(2);
         $this->array(array_pop($databases))
-         ->string['name']->isIdenticalTo('new_database')
-         ->integer['size']->isIdenticalTo(2048);
+            ->string['name']->isIdenticalTo('new_database')
+            ->integer['size']->isIdenticalTo(2048);
         $this->array(array_pop($databases))
-         ->string['name']->isIdenticalTo('glpi')
-         ->integer['size']->isIdenticalTo(55000);
+            ->string['name']->isIdenticalTo('glpi')
+            ->integer['size']->isIdenticalTo(55000);
     }
 
     public function testImportPhone()
@@ -4598,10 +4875,11 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(4)
+        $this->array($metadata)->hasSize(5)
          ->string['deviceid']->isIdenticalTo('Mi9TPro-TéléphoneM-2019-12-18-14-30-16')
          ->string['version']->isIdenticalTo('example-app-java')
          ->string['itemtype']->isIdenticalTo('Phone')
+         ->variable['port']->isIdenticalTo(null)
          ->string['action']->isIdenticalTo('inventory');
 
         //check created agent
@@ -4613,9 +4891,33 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
          ->string['deviceid']->isIdenticalTo('Mi9TPro-TéléphoneM-2019-12-18-14-30-16')
          ->string['name']->isIdenticalTo('Mi9TPro-TéléphoneM-2019-12-18-14-30-16')
          ->string['itemtype']->isIdenticalTo('Phone')
-         ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
+         ->integer['agenttypes_id']->isIdenticalTo($agenttype['id'])
+         ->integer['items_id']->isGreaterThan(0);
 
-        //get computer models, manufacturer, ...
+        //check matchedlogs
+        $mlogs = new \RuleMatchedLog();
+        $found = $mlogs->find();
+        $this->array($found)->hasSize(1);
+
+        $criteria = [
+            'FROM' => \RuleMatchedLog::getTable(),
+            'LEFT JOIN' => [
+                \Rule::getTable() => [
+                    'ON' => [
+                        \RuleMatchedLog::getTable() => 'rules_id',
+                        \Rule::getTable() => 'id'
+                    ]
+                ]
+            ],
+            'WHERE' => ['itemtype' => \Phone::getType()]
+        ];
+
+        $iterator = $DB->request($criteria);
+        $this->integer(count($iterator))->isIdenticalTo(1);
+        $this->string($iterator->current()['name'])->isIdenticalTo('Global import (by serial)');
+        $this->string($iterator->current()['method'])->isIdenticalTo(\Glpi\Inventory\Request::INVENT_QUERY);
+
+        //get phone models, manufacturer, ...
         $autoupdatesystems = $DB->request(['FROM' => \AutoupdateSystem::getTable(), 'WHERE' => ['name' => 'GLPI Native Inventory']])->current();
         $this->array($autoupdatesystems);
         $autoupdatesystems_id = $autoupdatesystems['id'];
@@ -4632,17 +4934,17 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $this->array($cmanuf);
         $manufacturers_id = $cmanuf['id'];
 
-        //check created computer
-        $computers_id = $inventory->getAgent()->fields['items_id'];
-        $this->integer($computers_id)->isGreaterThan(0);
-        $computer = new \Phone();
-        $this->boolean($computer->getFromDB($computers_id))->isTrue();
+        //check created phone
+        $phones_id = $inventory->getAgent()->fields['items_id'];
+        $this->integer($phones_id)->isGreaterThan(0);
+        $phone = new \Phone();
+        $this->boolean($phone->getFromDB($phones_id))->isTrue();
 
         $expected = [
-            'id' => $computers_id,
+            'id' => $phones_id,
             'entities_id' => 0,
             'name' => 'Mi9TPro-TéléphoneM',
-            'date_mod' => $computer->fields['date_mod'],
+            'date_mod' => $phone->fields['date_mod'],
             'contact' => 'builder',
             'contact_num' => null,
             'users_id_tech' => 0,
@@ -4670,21 +4972,21 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             'is_dynamic' => 1,
             'autoupdatesystems_id' => $autoupdatesystems_id,
             'uuid' => 'af8d3fcfa6fe4784',
-            'date_creation' => $computer->fields['date_creation'],
+            'date_creation' => $phone->fields['date_creation'],
             'is_recursive' => 0,
-            'last_inventory_update' => $computer->fields['last_inventory_update'],
+            'last_inventory_update' => $phone->fields['last_inventory_update'],
         ];
-        $this->array($computer->fields)->isIdenticalTo($expected);
+        $this->array($phone->fields)->isIdenticalTo($expected);
 
         //operating system
         $ios = new \Item_OperatingSystem();
-        $iterator = $ios->getFromItem($computer);
+        $iterator = $ios->getFromItem($phone);
         $record = $iterator->current();
 
         $expected = [
             'assocID' => $record['assocID'],
             'name' => 'Q Android 10.0 api 29',
-            'version' => null,
+            'version' => '29',
             'architecture' => 'arm64-v8a,armeabi-v7a,armeabi',
             'servicepack' => null,
         ];
@@ -4692,12 +4994,12 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //remote management
         $mgmt = new \Item_RemoteManagement();
-        $iterator = $mgmt->getFromItem($computer);
+        $iterator = $mgmt->getFromItem($phone);
         $this->integer(count($iterator))->isIdenticalTo(0);
 
         //volumes
         $idisks = new \Item_Disk();
-        $iterator = $idisks->getFromItem($computer);
+        $iterator = $idisks->getFromItem($phone);
         $this->integer(count($iterator))->isIdenticalTo(4);
 
         $expecteds = [
@@ -4732,7 +5034,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
                 'encryption_tool' => null,
                 'encryption_algorithm' => null,
                 'encryption_type' => null,
-                'items_id'     => $computers_id,
+                'items_id'     => $phones_id,
                 'itemtype'     => 'Phone',
                 'entities_id'  => 0,
                 'is_deleted'   => 0,
@@ -4748,7 +5050,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $iterator = $DB->request([
             'FROM'   => \NetworkPort::getTable(),
             'WHERE'  => [
-                'items_id'           => $computers_id,
+                'items_id'           => $phones_id,
                 'itemtype'           => 'Phone',
             ],
         ]);
@@ -4760,6 +5062,8 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
                 'name' => 'No description found',
                 'instantiation_type' => 'NetworkPortWifi',
                 'mac' => 'e0:dc:ff:ed:09:59',
+                'ifstatus' => '1',
+                'ifinternalstatus' => '1',
             ]
         ];
 
@@ -4788,7 +5092,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
             $expected = $expecteds[$i];
             $expected = $expected + [
-                'items_id' => $computers_id,
+                'items_id' => $phones_id,
                 'itemtype' => 'Phone',
                 'entities_id' => 0,
                 'is_recursive' => 0,
@@ -4851,7 +5155,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
         $allcount = 0;
         foreach (\Item_Devices::getItemAffinities('Computer') as $link_type) {
             $link        = getItemForItemtype($link_type);
-            $iterator = $DB->request($link->getTableGroupCriteria($computer));
+            $iterator = $DB->request($link->getTableGroupCriteria($phone));
             $allcount += count($iterator);
             $components[$link_type] = [];
 
@@ -4891,7 +5195,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             'Item_DeviceMotherboard' => [],
             'Item_DeviceFirmware' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicefirmwares_id' => 104,
                     'is_deleted' => 0,
@@ -4906,7 +5210,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             ],
             'Item_DeviceProcessor' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'deviceprocessors_id' => 3060400,
                     'frequency' => 1785,
@@ -4925,7 +5229,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             ],
             'Item_DeviceMemory' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicememories_id' => 4,
                     'size' => 5523,
@@ -4943,7 +5247,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             'Item_DeviceHardDrive' => [],
             'Item_DeviceNetworkCard' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicenetworkcards_id' => 66,
                     'mac' => 'e0:dc:ff:ed:09:59',
@@ -4961,7 +5265,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             'Item_DeviceDrive' => [],
             'Item_DeviceBattery' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicebatteries_id' => 70,
                     'manufacturing_date' => null,
@@ -4985,7 +5289,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             'Item_DeviceGeneric' => [],
             'Item_DeviceSimcard' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicesimcards_id' => 68,
                     'is_deleted' => 0,
@@ -5008,7 +5312,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             ],
             'Item_DeviceCamera' => [
                 [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicecameras_id' => 4,
                     'is_deleted' => 0,
@@ -5016,7 +5320,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
                     'entities_id' => 0,
                     'is_recursive' => 0,
                 ], [
-                    'items_id' => $computers_id,
+                    'items_id' => $phones_id,
                     'itemtype' => 'Phone',
                     'devicecameras_id' => 4,
                     'is_deleted' => 0,
@@ -5042,7 +5346,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //software
         $isoft = new \Item_SoftwareVersion();
-        $iterator = $isoft->getFromItem($computer);
+        $iterator = $isoft->getFromItem($phone);
         $this->integer(count($iterator))->isIdenticalTo(3);
 
         $expecteds = [
@@ -5085,7 +5389,7 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(5)
+        $this->array($metadata)->hasSize(6)
          ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
@@ -5140,5 +5444,464 @@ Compiled Tue 28-Sep-10 13:44 by prod_rel_team",
             40570,
         ];
         $this->checkComputer1Batteries($computer, $capacities);
+    }
+
+    public function testDictionnaryManufacturer()
+    {
+        global $DB;
+
+        //create manufacturer dictionary entry
+        $rule = new \Rule();
+        $criteria = new \RuleCriteria();
+        $action = new \RuleAction();
+        $collection = new \RuleDictionnaryManufacturerCollection();
+        $manufacturer = new \Manufacturer();
+        //$manufacturers_id = $manufacturer->importExternal('Mozilla');
+
+        $rules_id = $rule->add(['name' => 'Set manufacturer',
+            'is_active' => 1,
+            'entities_id' => 0,
+            'sub_type' => 'RuleDictionnaryManufacturer',
+            'match' => \Rule::AND_MATCHING,
+            'condition' => 0,
+            'description' => ''
+        ]);
+        $this->integer($rules_id)->isGreaterThan(0);
+
+        $this->integer(
+            $criteria->add([
+                'rules_id' => $rules_id,
+                'criteria' => 'name',
+                'condition' => \Rule::PATTERN_IS,
+                'pattern' => 'Dell Inc.'
+            ])
+        )->isGreaterThan(0);
+
+        $this->integer(
+            $action->add([
+                'rules_id' => $rules_id,
+                'action_type' => 'assign',
+                'field' => 'name',
+                'value' => 'Dictionary manufacturer'
+            ])
+        )->isGreaterThan(0);
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_2.json'));
+
+        $nb_computers = countElementsInTable(\Computer::getTable());
+        $inventory = $this->doInventory($json);
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(5)
+            ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['action']->isIdenticalTo('inventory');
+
+        //check we add only one computer
+        ++$nb_computers;
+        $this->integer(countElementsInTable(\Computer::getTable()))->isIdenticalTo($nb_computers);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+        $this->array($agent)
+            ->string['deviceid']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['name']->isIdenticalTo('acomputer-2021-01-26-14-32-36')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->integer['items_id']->isGreaterThan(0);
+
+        //check created computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+        $manufacturer = new \Manufacturer();
+        $this->boolean($manufacturer->getFromDB($computer->fields['manufacturers_id']))->isTrue();
+        $this->string($manufacturer->fields['name'])->isIdenticalTo('Dictionary manufacturer');
+    }
+
+    public function testDictionnaryOperatingSystem()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check created computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_system = new OperatingSystem();
+        $this->boolean(
+            $operating_system->getFromDB($item_operating->fields['operatingsystems_id'])
+        )->isTrue();
+
+        $this->string($operating_system->fields['name'])->isEqualTo("Fedora 31 (Workstation Edition)");
+
+        //create rule dictionnary operating system
+        $rule = new \Rule();
+        $criteria = new \RuleCriteria();
+        $action = new \RuleAction();
+
+        $rules_id = $rule->add(['name' => 'Set specific operatingSystem',
+            'is_active' => 1,
+            'entities_id' => 0,
+            'sub_type' => 'RuleDictionnaryOperatingSystem',
+            'match' => \Rule::AND_MATCHING,
+            'condition' => 0,
+            'description' => ''
+        ]);
+        $this->integer($rules_id)->isGreaterThan(0);
+
+        $this->integer(
+            $criteria->add([
+                'rules_id' => $rules_id,
+                'criteria' => 'name',
+                'condition' => \Rule::PATTERN_CONTAIN,
+                'pattern' => 'Fedora 31'
+            ])
+        )->isGreaterThan(0);
+
+        $this->integer(
+            $action->add([
+                'rules_id' => $rules_id,
+                'action_type' => 'assign',
+                'field' => 'name',
+                'value' => 'Ubuntu'
+            ])
+        )->isGreaterThan(0);
+
+        //redo an inventory
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check updated computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_system = new OperatingSystem();
+        $this->boolean(
+            $operating_system->getFromDB($item_operating->fields['operatingsystems_id'])
+        )->isTrue();
+
+        $this->string($operating_system->fields['name'])->isEqualTo("Ubuntu");
+    }
+
+    public function testDictionnaryOperatingSystemVersion()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check created computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_system_version = new OperatingSystemVersion();
+        $this->boolean(
+            $operating_system_version->getFromDB($item_operating->fields['operatingsystemversions_id'])
+        )->isTrue();
+
+        //check if is original value
+        $this->string($operating_system_version->fields['name'])->isEqualTo("31 (Workstation Edition)");
+
+        //create rule dictionnary operating system
+        $rule = new \Rule();
+        $criteria = new \RuleCriteria();
+        $action = new \RuleAction();
+
+        $rules_id = $rule->add(['name' => 'Set specific operatingSystem version',
+            'is_active' => 1,
+            'entities_id' => 0,
+            'sub_type' => 'RuleDictionnaryOperatingSystemVersion',
+            'match' => \Rule::AND_MATCHING,
+            'condition' => 0,
+            'description' => ''
+        ]);
+        $this->integer($rules_id)->isGreaterThan(0);
+
+        $this->integer(
+            $criteria->add([
+                'rules_id' => $rules_id,
+                'criteria' => 'name',
+                'condition' => \Rule::PATTERN_CONTAIN,
+                'pattern' => '31 (Workstation Edition)'
+            ])
+        )->isGreaterThan(0);
+
+        $this->integer(
+            $action->add([
+                'rules_id' => $rules_id,
+                'action_type' => 'assign',
+                'field' => 'name',
+                'value' => 'New version'
+            ])
+        )->isGreaterThan(0);
+
+        //redo an inventory
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check updated computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_system_version = new OperatingSystemVersion();
+        $this->boolean(
+            $operating_system_version->getFromDB($item_operating->fields['operatingsystemversions_id'])
+        )->isTrue();
+
+        //check if is specific value
+        $this->string($operating_system_version->fields['name'])->isEqualTo("New version");
+    }
+
+    public function testDictionnaryOperatingSystemArchitecture()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check created computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_arch = new OperatingSystemArchitecture();
+        $this->boolean(
+            $operating_arch->getFromDB($item_operating->fields['operatingsystemarchitectures_id'])
+        )->isTrue();
+        //check if is original value
+        $this->string($operating_arch->fields['name'])->isEqualTo("x86_64");
+
+        //create rule dictionnary operating system
+        $rule = new \Rule();
+        $criteria = new \RuleCriteria();
+        $action = new \RuleAction();
+
+        $rules_id = $rule->add(['name' => 'Set specific operatingSystem arch',
+            'is_active' => 1,
+            'entities_id' => 0,
+            'sub_type' => 'RuleDictionnaryOperatingSystemArchitecture',
+            'match' => \Rule::AND_MATCHING,
+            'condition' => 0,
+            'description' => ''
+        ]);
+        $this->integer($rules_id)->isGreaterThan(0);
+
+        $this->integer(
+            $criteria->add([
+                'rules_id' => $rules_id,
+                'criteria' => 'name',
+                'condition' => \Rule::PATTERN_CONTAIN,
+                'pattern' => 'x86_64'
+            ])
+        )->isGreaterThan(0);
+
+        $this->integer(
+            $action->add([
+                'rules_id' => $rules_id,
+                'action_type' => 'assign',
+                'field' => 'name',
+                'value' => 'New arch'
+            ])
+        )->isGreaterThan(0);
+
+        //redo an inventory
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check updated computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_arch = new OperatingSystemArchitecture();
+        $this->boolean(
+            $operating_arch->getFromDB($item_operating->fields['operatingsystemarchitectures_id'])
+        )->isTrue();
+
+        //check if is specific value
+        $this->string($operating_arch->fields['name'])->isEqualTo("New arch");
+    }
+
+    public function testDictionnaryOperatingSystemServicePack()
+    {
+        global $DB;
+
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check created computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        //No service pack from linux (normal)
+        $this->integer($item_operating->fields['operatingsystemservicepacks_id'])->isEqualto(0);
+
+        //create rule dictionnary operating system
+        $rule = new \Rule();
+        $criteria = new \RuleCriteria();
+        $action = new \RuleAction();
+
+        $rules_id = $rule->add(['name' => 'Set specific operatingSystem service pack',
+            'is_active' => 1,
+            'entities_id' => 0,
+            'sub_type' => 'RuleDictionnaryOperatingSystemServicePack',
+            'match' => \Rule::AND_MATCHING,
+            'condition' => 0,
+            'description' => ''
+        ]);
+        $this->integer($rules_id)->isGreaterThan(0);
+
+        //create criteria on os_name
+        $this->integer(
+            $criteria->add([
+                'rules_id' => $rules_id,
+                'criteria' => 'os_name',
+                'condition' => \Rule::PATTERN_CONTAIN,
+                'pattern' => 'Fedora 31'
+            ])
+        )->isGreaterThan(0);
+
+        $this->integer(
+            $action->add([
+                'rules_id' => $rules_id,
+                'action_type' => 'assign',
+                'field' => 'name',
+                'value' => 'New service_pack'
+            ])
+        )->isGreaterThan(0);
+
+        //redo an inventory
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+        $this->doInventory($json);
+
+        //check created agent
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+
+        //check updated computer
+        $computer = new \Computer();
+        $this->boolean($computer->getFromDB($agent['items_id']))->isTrue();
+
+        //check OS
+        $item_operating = new Item_OperatingSystem();
+        $this->boolean(
+            $item_operating->getFromDBByCrit([
+                "itemtype" => 'Computer',
+                "items_id" => $agent['items_id'],
+            ])
+        )->isTrue();
+
+        $operating_service_pack = new OperatingSystemServicePack();
+        $this->boolean(
+            $operating_service_pack->getFromDB($item_operating->fields['operatingsystemservicepacks_id'])
+        )->isTrue();
+        //check if is specific value
+        $this->string($operating_service_pack->fields['name'])->isEqualTo("New service_pack");
     }
 }

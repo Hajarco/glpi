@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -74,8 +76,13 @@ class Printer_CartridgeInfo extends CommonDBChild
         $tags = $asset->knownTags();
 
         foreach ($info as $row) {
-            $property = $row['property'];
-            $value = $row['value'];
+            $property   = $row['property'];
+            $value      = $row['value'];
+
+            preg_match("/^toner(\w+.*$)/", $property, $matches);
+            $bar_color = $matches[1] ?? 'green';
+            $text_color = ($bar_color == "black") ? 'white' : 'black';
+
             echo "<tr>";
             echo sprintf("<td>%s</td>", $tags[$property]['name'] ?? $property);
 
@@ -90,20 +97,30 @@ class Printer_CartridgeInfo extends CommonDBChild
             }
 
             if (is_numeric($value)) {
-                $bar_color = 'green';
                 $progressbar_data = [
-                    'percent'      => $value,
-                    'percent_text' => $value,
-                    'color'        => $bar_color,
-                    'text'         => ''
+                    'percent'           => $value,
+                    'percent_text'      => $value,
+                    'background-color'  => $bar_color,
+                    'text-color'        => $text_color,
+                    'text'              => ''
                 ];
 
-                $out = "{$progressbar_data['text']}<div class='center' style='background-color: #ffffff; width: 100%;
-                     border: 1px solid #9BA563; position: relative;' >";
-                $out .= "<div style='position:absolute;'>&nbsp;{$progressbar_data['percent_text']}%</div>";
-                $out .= "<div class='center' style='background-color: {$progressbar_data['color']};
-                     width: {$progressbar_data['percent']}%; height: 12px' ></div>";
-                $out .= "</div>";
+
+                $out = <<<HTML
+                    <span class='text-nowrap'>
+                    {$progressbar_data['text']}
+                    </span>
+                    <div class="progress" style="height: 16px">
+                        <div class="progress-bar progress-bar-striped" role="progressbar"
+                            style="width: {$progressbar_data['percent']}%; background-color:
+                            {$progressbar_data['background-color']}; color: {$progressbar_data['text-color']};"
+                            aria-valuenow="{$progressbar_data['percent']}"
+                            aria-valuemin="0" aria-valuemax="100">
+                            {$progressbar_data['percent_text']}%
+                        </div>
+
+                    </div>
+HTML;
             } else {
                 $out = $value;
             }

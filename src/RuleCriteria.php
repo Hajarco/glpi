@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -99,7 +101,9 @@ class RuleCriteria extends CommonDBChild
     {
 
         if ($rule = getItemForItemtype(static::$itemtype)) {
-            return trim(preg_replace(['/<td[^>]*>/', '/<\/td>/'], [' ', ''], $rule->getMinimalCriteriaText($this->fields)));
+            $criteria_row = $rule->getMinimalCriteriaText($this->fields);
+            $criteria_text = trim(preg_replace(['/<td[^>]*>/', '/<\/td>/'], [' ', ''], $criteria_row));
+            return $criteria_text;
         }
         return '';
     }
@@ -516,6 +520,35 @@ class RuleCriteria extends CommonDBChild
             case Rule::PATTERN_IS_EMPTY:
                // Global criteria will be evaluated later
                 return true;
+
+            case Rule::PATTERN_CIDR:
+            case Rule::PATTERN_NOT_CIDR:
+                $exploded = explode('/', $pattern);
+                $subnet   = ip2long($exploded[0]);
+                $bits     = $exploded[1] ?? null;
+                $mask     = -1 << (32 - $bits);
+                $subnet  &= $mask; // nb: in case the supplied subnet wasn't correctly aligned
+
+                if (is_array($field)) {
+                    foreach ($field as $ip) {
+                        if (isset($ip) && $ip != '') {
+                            $ip = ip2long($ip);
+                            if (($ip & $mask) == $subnet) {
+                                return ($condition == Rule::PATTERN_CIDR) ? true : false;
+                            }
+                        }
+                    }
+                } else {
+                    if (isset($field) && $field != '') {
+                        $ip = ip2long($field);
+                        if (
+                            $condition == Rule::PATTERN_CIDR && ($ip & $mask) == $subnet
+                            || $condition == Rule::PATTERN_NOT_CIDR && ($ip & $mask) != $subnet
+                        ) {
+                            return true;
+                        }
+                    }
+                }
         }
         return false;
     }
@@ -549,8 +582,8 @@ class RuleCriteria extends CommonDBChild
      **/
     public static function getConditions($itemtype, $criterion = '')
     {
-
-        $criteria =  [Rule::PATTERN_IS              => __('is'),
+        $criteria =  [
+            Rule::PATTERN_IS              => __('is'),
             Rule::PATTERN_IS_NOT          => __('is not'),
             Rule::PATTERN_CONTAIN         => __('contains'),
             Rule::PATTERN_NOT_CONTAIN     => __('does not contain'),
@@ -561,6 +594,13 @@ class RuleCriteria extends CommonDBChild
             Rule::PATTERN_EXISTS          => __('exists'),
             Rule::PATTERN_DOES_NOT_EXISTS => __('does not exist')
         ];
+
+        if (in_array($criterion, ['ip', 'subnet'])) {
+            $criteria = $criteria + [
+                Rule::PATTERN_CIDR     => __('is CIDR'),
+                Rule::PATTERN_NOT_CIDR => __('is not CIDR')
+            ];
+        }
 
         $extra_criteria = call_user_func([$itemtype, 'addMoreCriteria'], $criterion);
 

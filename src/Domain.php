@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,20 +17,23 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
+
+use Glpi\Toolbox\URL;
 
 /// Class Domain
 class Domain extends CommonDBTM
@@ -88,48 +92,6 @@ class Domain extends CommonDBTM
         }
     }
 
-    public function getAdditionalFields()
-    {
-        $fields = parent::getAdditionalFields();
-        $fields[] = [
-            'name'  => 'is_active',
-            'label' => __('Is active'),
-            'type'  => 'bool',
-        ];
-
-        $fields[] = [
-            'name'  => 'domaintypes_id',
-            'label' => _n('Type', 'Types', 1),
-            'type'  => 'dropdownValue',
-        ];
-
-        $fields[] = [
-            'name'  => 'date_creation',
-            'label' => __('Creation date'),
-            'type'  => 'datetime',
-        ];
-
-        $fields[] = [
-            'name'  => 'date_expiration',
-            'label' => __('Expiration date'),
-            'type'  => 'datetime',
-        ];
-
-        $fields[] = [
-            'name'  => 'users_id_tech',
-            'label' => __('Technician in charge'),
-            'type'  => 'UserDropdown',
-        ];
-
-        $fields[] = [
-            'name'  => 'groups_id_tech',
-            'label' => __('Group in charge'),
-            'type'  => 'dropdownValue',
-        ];
-
-        return $fields;
-    }
-
     public function rawSearchOptions()
     {
         $tab = [];
@@ -168,8 +130,8 @@ class Domain extends CommonDBTM
         $tab[] = [
             'id'                 => '5',
             'table'              => $this->getTable(),
-            'field'              => 'date_creation',
-            'name'               => __('Creation date'),
+            'field'              => 'date_domaincreation',
+            'name'               => __('Registration date'),
             'datatype'           => 'date'
         ];
 
@@ -219,6 +181,15 @@ class Domain extends CommonDBTM
             'massiveaction'      => false,
             'name'               => __('Last update'),
             'datatype'           => 'datetime'
+        ];
+
+        $tab[] = [
+            'id'                 => '121',
+            'table'              => $this->getTable(),
+            'field'              => 'date_creation',
+            'name'               => __('Creation date'),
+            'datatype'           => 'datetime',
+            'massiveaction'      => false
         ];
 
         $tab[] = [
@@ -756,14 +727,22 @@ class Domain extends CommonDBTM
         return $types;
     }
 
-    public static function generateLinkContents($link, CommonDBTM $item)
+    /**
+     * @FIXME Uncomment $safe_url parameter declaration in GLPI 10.1.
+     */
+    public static function generateLinkContents($link, CommonDBTM $item/*, bool $safe_url = true*/)
     {
+        $safe_url = func_num_args() === 3 ? func_get_arg(2) : true;
+
         if (strstr($link, "[DOMAIN]")) {
             $link = str_replace("[DOMAIN]", $item->getName(), $link);
+            if ($safe_url) {
+                $link = URL::sanitizeURL($link) ?: '#';
+            }
             return [$link];
         }
 
-        return parent::generateLinkContents($link, $item);
+        return parent::generateLinkContents($link, $item, $safe_url);
     }
 
     public static function getUsed(array $used, $domaintype)
@@ -786,10 +765,15 @@ class Domain extends CommonDBTM
         return $used;
     }
 
+    public static function canManageRecords()
+    {
+        return static::canView() && count($_SESSION['glpiactiveprofile']['managed_domainrecordtypes'] ?? []) > 0;
+    }
+
     public static function getAdditionalMenuLinks()
     {
         $links = [];
-        if (static::canView()) {
+        if (static::canManageRecords()) {
             $rooms = "<i class='fa fa-clipboard-list pointer' title=\"" . DomainRecord::getTypeName(Session::getPluralNumber()) . "\"></i>
             <span class='d-none d-xxl-block ps-1'>
                " . DomainRecord::getTypeName(Session::getPluralNumber()) . "
@@ -804,7 +788,7 @@ class Domain extends CommonDBTM
 
     public static function getAdditionalMenuOptions()
     {
-        if (static::canView()) {
+        if (static::canManageRecords()) {
             return [
                 'domainrecord' => [
                     'icon'  => DomainRecord::getIcon(),
@@ -817,6 +801,7 @@ class Domain extends CommonDBTM
                 ]
             ];
         }
+        return false;
     }
 
     public function getCanonicalName()
@@ -832,5 +817,11 @@ class Domain extends CommonDBTM
     public static function getIcon()
     {
         return "fas fa-globe-americas";
+    }
+
+    public function post_updateItem($history = 1)
+    {
+        $this->cleanAlerts([Alert::END, Alert::NOTICE]);
+        parent::post_updateItem($history);
     }
 }

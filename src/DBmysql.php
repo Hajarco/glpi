@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -578,7 +580,15 @@ class DBmysql
      */
     public function insertId()
     {
-        return $this->dbh->insert_id;
+        $insert_id = $this->dbh->insert_id;
+
+        if ($insert_id === 0) {
+            // See https://www.php.net/manual/en/mysqli.insert-id.php
+            // `$this->dbh->insert_id` will return 0 value if `INSERT` statement did not change the `AUTO_INCREMENT` value.
+            // We have to retrieve it manually via `LAST_INSERT_ID()`.
+            $insert_id = $this->dbh->query('SELECT LAST_INSERT_ID()')->fetch_row()[0];
+        }
+        return $insert_id;
     }
 
     /**
@@ -771,11 +781,13 @@ class DBmysql
     /**
      * Returns columns that uses signed integers for primary/foreign keys.
      *
+     * @param bool $exclude_plugins
+     *
      * @return DBmysqlIterator
      *
      * @since 9.5.7
      */
-    public function getSignedKeysColumns()
+    public function getSignedKeysColumns(bool $exclude_plugins = false)
     {
         $query = [
             'SELECT'       => [
@@ -818,6 +830,10 @@ class DBmysql
             ],
             'ORDER'       => ['TABLE_NAME']
         ];
+
+        if ($exclude_plugins) {
+            $query['WHERE'][] = ['NOT' => ['information_schema.tables.table_name' => ['LIKE', 'glpi\_plugin\_%']]];
+        }
 
         $iterator = $this->request($query);
 
@@ -1469,7 +1485,7 @@ class DBmysql
      * @param string  $table   Table name
      * @param array   $params  Query parameters ([:field name => field value)
      * @param array   $where   WHERE clause
-     * @param boolean $onlyone Do the update only one one element, defaults to true
+     * @param boolean $onlyone Do the update only one element, defaults to true
      *
      * @return mysqli_result|boolean Query result handler
      */
@@ -1679,16 +1695,24 @@ class DBmysql
     {
         if (!$savepoint) {
             $this->in_transaction = false;
-            $this->dbh->rollback();
+            return $this->dbh->rollback();
         } else {
-            $this->rollbackTo($savepoint);
+            return $this->rollbackTo($savepoint);
         }
     }
 
+    /**
+     * Rollbacks a transaction to a specified savepoint
+     *
+     * @param string $name
+     *
+     * @return boolean
+     */
     protected function rollbackTo($name)
     {
-       // No proper rollback to savepoint support in mysqli extension?
-        $this->query('ROLLBACK TO ' . self::quoteName($name));
+        // No proper rollback to savepoint support in mysqli extension?
+        $result = $this->query('ROLLBACK TO ' . self::quoteName($name));
+        return $result !== false;
     }
 
     /**
@@ -1935,7 +1959,7 @@ class DBmysql
     /**
      * Executes a prepared statement
      *
-     * @param mysqli_stmt $stmt STatement to execute
+     * @param mysqli_stmt $stmt Statement to execute
      *
      * @return void
      */

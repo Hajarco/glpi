@@ -5,9 +5,12 @@
 /config/local_define.php
 /tests/config_db*
 /tests/cache.php
-/marketplace/
-/plugins/
-/files/
+/marketplace/*
+!/marketplace/.gitkeep
+/plugins/*
+!/plugins/.gitkeep
+/files/*/*
+!/files/*/.gitkeep
 /.buildpath
 /.project
 /.settings/
@@ -17,7 +20,8 @@
 /tools/vendor/
 /tools/api/
 /tools/htmlcov/
-/vendor/
+/vendor/*
+!/vendor/.htaccess
 phpunit.xml
 /tests/code-coverage/
 /tests/coverage-*/

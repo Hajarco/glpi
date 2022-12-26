@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -55,8 +57,8 @@ if (isset($_POST['inquest_config']) && isset($_POST['entities_id'])) {
     }
 
     if ($_POST['inquest_config'] > 0) {
-        echo "<table class='tab_cadre_fixe' width='50%'>";
-        echo "<tr class='tab_bg_1'><td width='50%'>" . __('Create survey after') . "</td>";
+        echo "<table class='tab_cadre_fixe w-50'>";
+        echo "<tr class='tab_bg_1'><td class='w-50'>" . __('Create survey after') . "</td>";
         echo "<td>";
         Dropdown::showNumber(
             'inquest_delay',
@@ -82,7 +84,7 @@ if (isset($_POST['inquest_config']) && isset($_POST['entities_id'])) {
         ]);
         echo "</td></tr>";
 
-        echo "<tr class='tab_bg_1'><td width='50%'>" . __('Duration of survey') . "</td>";
+        echo "<tr class='tab_bg_1'><td class='w-50'>" . __('Duration of survey') . "</td>";
         echo "<td>";
         Dropdown::showNumber(
             'inquest_duration',

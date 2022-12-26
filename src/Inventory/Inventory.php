@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -36,6 +38,7 @@ namespace Glpi\Inventory;
 use Agent;
 use CommonDBTM;
 use Glpi\Inventory\Asset\InventoryAsset;
+use Glpi\Inventory\Asset\MainAsset;
 use Lockedfield;
 use RefusedEquipment;
 use Session;
@@ -70,11 +73,13 @@ class Inventory
     protected $conf;
     /** @var array */
     private $benchs = [];
+    /** @var string|false */
+    private $inventory_tmpfile = false;
     /** @var string */
-    private $inventory_id;
+    private $inventory_content;
     /** @var integer */
     private $inventory_format;
-    /** @var InventoryAsset */
+    /** @var MainAsset */
     private $mainasset;
     /** @var string */
     private $request_query;
@@ -90,7 +95,6 @@ class Inventory
     {
         $this->mode = $mode;
         $this->conf = new Conf();
-        $this->inventory_id = Toolbox::getRandomString(30);
 
         if (null !== $data) {
             $this->setData($data, $format);
@@ -116,9 +120,8 @@ class Inventory
     {
 
         // Write inventory file
-        $dir = GLPI_INVENTORY_DIR . '/';
-        if (!is_dir($dir)) {
-            mkdir($dir);
+        if (!is_dir(GLPI_INVENTORY_DIR)) {
+            mkdir(GLPI_INVENTORY_DIR);
         }
 
         $converter = new Converter();
@@ -132,11 +135,13 @@ class Inventory
 
         if (Request::XML_MODE === $format) {
             $this->inventory_format = Request::XML_MODE;
-            file_put_contents($dir . '/' . $this->inventory_id . '.xml', $data->asXML());
+            $this->inventory_tmpfile = tempnam(GLPI_INVENTORY_DIR, 'xml_');
+            $contentdata = $data->asXML();
             //convert legacy format
-            $data = json_decode($converter->convert($data->asXML()));
+            $data = json_decode($converter->convert($contentdata));
         } else {
-            file_put_contents($dir . '/' . $this->inventory_id . '.json', json_encode($data));
+            $this->inventory_tmpfile = tempnam(GLPI_INVENTORY_DIR, 'json_');
+            $contentdata = json_encode($data);
         }
 
         try {
@@ -147,9 +152,19 @@ class Inventory
                 '$ref[inventory.schema.json]',
                 $e->getMessage()
             );
+            if ($this->inventory_tmpfile !== false && file_exists($this->inventory_tmpfile)) {
+                unlink($this->inventory_tmpfile);
+            }
             return false;
         } finally {
             $this->raw_data = $data;
+        }
+
+        if ($this->inventory_tmpfile !== false) {
+            file_put_contents($this->inventory_tmpfile, $contentdata);
+        } else {
+            //fallback to in-memory storage if tempnam() call returned false
+            $this->inventory_content = $contentdata;
         }
 
         $this->extractMetadata();
@@ -182,6 +197,7 @@ class Inventory
             'deviceid' => $this->raw_data->deviceid,
             'version' => $this->raw_data->version ?? $this->raw_data->content->versionclient ?? null,
             'itemtype' => $this->raw_data->itemtype ?? 'Computer',
+            'port'      => $this->raw_data->{'httpd-port'} ?? null,
         ];
 
         if (property_exists($this->raw_data, 'content') && property_exists($this->raw_data->content, 'versionprovider')) {
@@ -235,6 +251,10 @@ class Inventory
             $_SESSION['glpiinventoryuserrunning'] = 'inventory';
         }
 
+        if (!isset($_SESSION['glpiname'])) {
+            $_SESSION['glpiname'] = $_SESSION['glpiinventoryuserrunning'];
+        }
+
         try {
             //bench
             $main_start = microtime(true);
@@ -246,11 +266,16 @@ class Inventory
             $schema = $converter->buildSchema();
 
             $properties = array_keys((array)$schema->properties->content->properties);
-            unset($properties['versionclient'], $properties['versionprovider']); //already handled in extractMetadata
+            $properties = array_filter(
+                $properties,
+                function ($property_name) {
+                    return !in_array($property_name, ['versionclient', 'versionprovider']); //already handled in extractMetadata
+                }
+            );
             if (method_exists($this, 'getSchemaExtraProps')) {
                 $properties = array_merge(
                     $properties,
-                    $this->getSchemaExtraProps()
+                    array_keys($this->getSchemaExtraProps())
                 );
             }
             $contents = $this->raw_data->content;
@@ -386,10 +411,8 @@ class Inventory
      */
     private function handleInventoryFile()
     {
-        $ext = (Request::XML_MODE === $this->inventory_format ? 'xml' : 'json');
-        $tmpfile = sprintf('%s/%s.%s', GLPI_INVENTORY_DIR, $this->inventory_id, $ext);
-
         if (isset($this->mainasset)) {
+            $ext = (Request::XML_MODE === $this->inventory_format ? 'xml' : 'json');
             $items = $this->getItems();
 
             foreach ($items as $item) {
@@ -404,12 +427,16 @@ class Inventory
                 if (!is_dir($subdir)) {
                     mkdir($subdir, 0755, true);
                 }
-                copy($tmpfile, $filename);
+                if ($this->inventory_tmpfile !== false) {
+                    copy($this->inventory_tmpfile, $filename);
+                } elseif (isset($this->inventory_content)) {
+                    file_put_contents($filename, $this->inventory_content);
+                }
             }
         }
 
-        if (file_exists($tmpfile)) {
-            unlink($tmpfile);
+        if ($this->inventory_tmpfile !== false && file_exists($this->inventory_tmpfile)) {
+            unlink($this->inventory_tmpfile);
         }
     }
 
@@ -435,8 +462,7 @@ class Inventory
 
     public static function getMenuContent()
     {
-        // Require config update permission globally
-        if (!Session::haveRight('config', UPDATE)) {
+        if (!Session::haveRight(Conf::$rightname, Conf::IMPORTFROMFILE)) {
             return false;
         }
 
@@ -472,12 +498,14 @@ class Inventory
             ];
         }
 
-        if (Session::haveRight(Lockedfield::$rightname, READ)) {
+        if (Session::haveRight(Lockedfield::$rightname, UPDATE)) {
             $menu['options']['lockedfield'] = [
                 'icon'  => Lockedfield::getIcon(),
                 'title' => Lockedfield::getTypeName(Session::getPluralNumber()),
                 'page'  => Lockedfield::getSearchURL(false),
-                'links' => $links
+                'links' => [
+                    "<i class=\"ti ti-plus\" title=\"" . __('Add global lock') . "\"></i><span class='d-none d-xxl-block'>" . __('Add global lock') . "</span>" => Lockedfield::getFormURL(false)
+                ] + $links
             ];
         }
 
@@ -694,10 +722,10 @@ class Inventory
     /**
      * Add bench value
      *
-     * @param string  $asset Asset
-     * @param string  $type Either prepare or handle
-     * @param integer $start Start time
-     * @param string  $extra Extra value to be used as label
+     * @param string        $asset Asset
+     * @param string        $type Either prepare or handle
+     * @param float|integer $start Start time
+     * @param string        $extra Extra value to be used as label
      *
      * @return void
      */
@@ -852,6 +880,7 @@ class Inventory
         $existing_types = glob(GLPI_INVENTORY_DIR . '/*', GLOB_ONLYDIR);
 
         foreach ($existing_types as $existing_type) {
+            /** @var class-string<CommonDBTM> $itemtype */
             $itemtype = str_replace(GLPI_INVENTORY_DIR . '/', '', $existing_type);
            //$invnetoryfiles = new RecursiveIteratorIterator(new RecursiveDirectoryIterator('path/to/folder'));
             $inventory_files = new \RegexIterator(

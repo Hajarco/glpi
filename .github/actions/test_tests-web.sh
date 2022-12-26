@@ -1,6 +1,8 @@
-#!/bin/bash -e
+#!/bin/bash
+set -e -u -x -o pipefail
 
 php -S localhost:8088 tests/router.php &>/dev/null &
+bin/console glpi:config:set --config-dir=./tests/config --context=inventory enabled_inventory 1
 vendor/bin/atoum \
   -p 'php -d memory_limit=512M' \
   --debug \
@@ -12,3 +14,4 @@ vendor/bin/atoum \
   --fail-if-skipped-methods \
   --max-children-number 1 \
   -d tests/web
+bin/console glpi:config:set --config-dir=./tests/config --context=inventory enabled_inventory 0

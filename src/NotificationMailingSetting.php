@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -75,7 +77,7 @@ class NotificationMailingSetting extends NotificationSetting
         if ($CFG_GLPI['notifications_mailing']) {
             $out .= "<tr class='tab_bg_2'>";
             $out .= "<td><label for='admin_email'>" . __('Administrator email address') . "</label></td>";
-            $out .= "<td><input type='text' class='form-control' name='admin_email' id='admin_email' value='" .
+            $out .= "<td><input type='email' class='form-control' name='admin_email' id='admin_email' value='" .
                     $CFG_GLPI["admin_email"] . "'>";
             if (!NotificationMailing::isUserAddressValid($CFG_GLPI["admin_email"])) {
                 $out .= "<br/><span class='red'>&nbsp;" . __('Invalid email address') . "</span>";
@@ -89,7 +91,7 @@ class NotificationMailingSetting extends NotificationSetting
             $out .= "<tr class='tab_bg_2'>";
             $out .= "<td><label for='from_email'>" . __('Email sender address') . " <i class='pointer fa fa-info' title='" .
             __s('Address to use in from for sent emails.') . "\n" . __s('If not set, main or entity administrator email address will be used.')  . "'></i></label></td>";
-            $out .= "<td><input type='text' class='form-control' name='from_email' id='from_email' value='" .
+            $out .= "<td><input type='email' class='form-control' name='from_email' id='from_email' value='" .
                     $CFG_GLPI["from_email"] . "'>";
             if (!empty($CFG_GLPI['from_email']) && !NotificationMailing::isUserAddressValid($CFG_GLPI["from_email"])) {
                 $out .= "<br/><span class='red'>&nbsp;" . __('Invalid email address') . "</span>";
@@ -105,7 +107,7 @@ class NotificationMailingSetting extends NotificationSetting
             $out .= "<tr class='tab_bg_2'>";
             $out .= "<td><label for='replyto_email'>" . __('Reply-To address') . " <i class='pointer fa fa-info' title='" .
             __s('Optionnal reply to address.') . "\n" . __s('If not set, main or entity administrator email address will be used.') . "'></i></label></td>";
-            $out .= "<td><input type='text' class='form-control' name='replyto_email' id='replyto_email' value='" .
+            $out .= "<td><input type='email' class='form-control' name='replyto_email' id='replyto_email' value='" .
                     $CFG_GLPI["replyto_email"] . "'>";
             if (
                 !empty($CFG_GLPI['replyto_email'])
@@ -123,7 +125,7 @@ class NotificationMailingSetting extends NotificationSetting
             $out .= "<tr class='tab_bg_2'>";
             $out .= "<td><label for='noreply_email'>" . __('No-Reply address') . " <i class='pointer fa fa-info' title='" .
             __s('Optionnal No-Reply address.') . "\n" . __s('If set, it will be used for notifications that doesn\'t expect a reply.') . "'></i></label></td>";
-            $out .= "<td><input type='text' class='form-control' name='noreply_email' id='noreply_email' value='" .
+            $out .= "<td><input type='email' class='form-control' name='noreply_email' id='noreply_email' value='" .
                     $CFG_GLPI["noreply_email"] . "'>";
             if (
                 !empty($CFG_GLPI['noreply_email'])

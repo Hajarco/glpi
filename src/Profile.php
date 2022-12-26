@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -1783,16 +1785,56 @@ class Profile extends CommonDBTM
                 'label'     => __('Notification queue'),
                 'field'     => 'queuednotification'
             ], [
-                'itemtype'  => 'Glpi\Inventory\Conf',
-                'label'     => __('Inventory'),
-                'field'     => 'inventory'
-            ], [
                 'itemtype'  => 'Log',
                 'label'     => Log::getTypeName(Session::getPluralNumber()),
                 'field'     => 'logs'
             ]
         ];
         $matrix_options['title'] = __('Administration');
+        $this->displayRightsChoiceMatrix($rights, $matrix_options);
+
+        $rights = [
+            [
+                'itemtype'  => 'Glpi\Inventory\Conf',
+                'label'     => __('Inventory'),
+                'field'     => 'inventory'
+            ], [
+                'itemtype'  => 'LockedField',
+                'label'     => Lockedfield::getTypeName(Session::getPluralNumber()),
+                'field'     => 'locked_field',
+                'rights'  => [
+                    CREATE => __('Create'), // For READ / CREATE
+                    UPDATE => __('Update'), //for CREATE / PURGE global lock
+                ],
+            ], [
+                'itemtype'  => 'SNMPCredential',
+                'label'     => SNMPCredential::getTypeName(Session::getPluralNumber()),
+                'field'     => 'snmpcredential',
+            ], [
+                'itemtype'  => 'RefusedEquipment',
+                'label'     => RefusedEquipment::getTypeName(Session::getPluralNumber()),
+                'field'     => 'refusedequipment',
+                'rights'  => [
+                    READ  => __('Read'),
+                    UPDATE  => __('Update'),
+                    PURGE   => ['short' => __('Purge'),
+                        'long'  => _x('button', 'Delete permanently')
+                    ]
+                ],
+            ], [
+                'itemtype'  => 'Agent',
+                'label'     => Agent::getTypeName(Session::getPluralNumber()),
+                'field'     => 'agent',
+                'rights'  => [
+                    READ    => __('Read'),
+                    UPDATE  => __('Update'),
+                    PURGE   => ['short' => __('Purge'),
+                        'long'  => _x('button', 'Delete permanently')
+                    ]
+                ],
+            ]
+        ];
+        $matrix_options['title'] = __('Inventory');
         $this->displayRightsChoiceMatrix($rights, $matrix_options);
 
         $rights = [['itemtype'  => 'Rule',
@@ -1802,6 +1844,10 @@ class Profile extends CommonDBTM
             ['itemtype'  => 'RuleImportAsset',
                 'label'     => __('Rules for assigning a computer to an entity'),
                 'field'     => 'rule_import'
+            ],
+            ['itemtype'  => 'RuleLocation',
+                'label'     => __('Rules for assigning a computer to a location'),
+                'field'     => 'rule_location'
             ],
             ['itemtype'  => 'RuleMailCollector',
                 'label'     => __('Rules for assigning a ticket created through a mails receiver'),
@@ -3418,7 +3464,7 @@ class Profile extends CommonDBTM
      * @param $itemtype   string   itemtype
      * @param $interface  string   (default 'central')
      *
-     * @return rights
+     * @return array
      **/
     public static function getRightsFor($itemtype, $interface = 'central')
     {
@@ -3427,6 +3473,8 @@ class Profile extends CommonDBTM
             $item = new $itemtype();
             return $item->getRights($interface);
         }
+
+        return [];
     }
 
 
@@ -3586,7 +3634,7 @@ class Profile extends CommonDBTM
      *             'display'
      *             'check_method'  method used to check the right
      *
-     * @return content if !display
+     * @return string|void Return generated content if `display` parameter is true.
      **/
     public static function getLinearRightChoice(array $elements, array $options = [])
     {

@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -72,7 +74,7 @@ class Sanitizer
         }
 
         if (self::isNsClassOrCallableIdentifier($value)) {
-            // Do not sanitize values that corresponds to an existing namespaced class, to prevent prevent having to unsanitize
+            // Do not sanitize values that corresponds to an existing namespaced class, to prevent having to unsanitize
             // every usage of `itemtype` to correctly handle namespaces.
             return $value;
         }
@@ -151,30 +153,25 @@ class Sanitizer
        // Search for unprotected control chars `NULL`, `\n`, `\r` and `EOF`.
         $control_chars = ["\x00", "\n", "\r", "\x1a"];
         foreach ($control_chars as $char) {
-            if (!str_contains($value, $char)) {
-                continue;
-            }
-            for ($i = 0; $i < $value_length; $i++) {
-                $char_length = strlen($char);
+            $char_length = strlen($char);
+            $i = 0;
+            while (($i = strpos($value, $char, $i)) !== false) {
                 if ($i + $char_length <= $value_length && substr($value, $i, $char_length) == $char) {
                     return false; // Unprotected control char found
                 }
+                $i++;
             }
         }
 
        // Search for unprotected quotes.
         $quotes = ["'", '"'];
         foreach ($quotes as $char) {
-            if (!str_contains($value, $char)) {
-                continue;
-            }
-            for ($i = 0; $i < $value_length; $i++) {
-                if (substr($value, $i, 1) != $char) {
-                    continue;
-                }
+            $i = 0;
+            while (($i = strpos($value, $char, $i)) !== false) {
                 if ($i === 0 || substr($value, $i - 1, 1) !== '\\') {
                     return false; // Unprotected quote found
                 }
+                $i++;
             }
         }
 
@@ -184,10 +181,9 @@ class Sanitizer
         if (str_contains($value, '\\')) {
             $special_chars = ['\x00', '\n', '\r', "\'", '\"', '\x1a'];
             $backslashes_count = 0;
-            for ($i = 0; $i < $value_length; $i++) {
-                if (substr($value, $i, 1) != '\\') {
-                    continue;
-                }
+
+            $i = 0;
+            while (($i = strpos($value, '\\', $i)) !== false) {
                 $has_special_chars = true;
 
                // Count successive backslashes.
@@ -210,6 +206,8 @@ class Sanitizer
                 if ($backslashes_count % 2 === 1) {
                     return false; // Unprotected backslash or quote found
                 }
+
+                $i++;
             }
         }
 
@@ -431,19 +429,28 @@ class Sanitizer
             return $value;
         }
 
-        for ($i = 0; $i < strlen($value); $i++) {
-            if (substr($value, $i, 1) != '\\') {
-                continue;
-            }
+        $offset = 0;
+        $previous_offset = 0;
+        $result = '';
+        while (($offset = strpos($value, '\\', $offset)) !== false) {
             foreach ($search as $index => $char) {
-                if ($i + strlen($char) <= strlen($value) && substr($value, $i + 1, strlen($char)) == $char) {
-                    $value = substr_replace($value, $replace[$index], $i, strlen($char) + 1);
+                $escaped_char = '\\' . $char;
+                if ($offset + strlen($char) <= strlen($value) && substr($value, $offset, strlen($escaped_char)) == $escaped_char) {
+                    // Append substring located between previous replaced char and current char
+                    $result .= substr($value, $previous_offset, $offset - $previous_offset);
+                    // Append replacement char
+                    $result .= $replace[$index];
+                    // Move ofsset after replaced escaped char
+                    $offset += strlen($escaped_char);
+                    $previous_offset = $offset;
                     break;
                 }
             }
         }
+        // Append substring located after latest replaced char
+        $result .= substr($value, $previous_offset);
 
-        return $value;
+        return $result;
     }
 
     /**

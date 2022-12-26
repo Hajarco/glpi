@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -42,8 +44,9 @@ class Agent extends DbTestCase
     public function testDefineTabs()
     {
         $expected = [
-            'Agent$main'   => 'Agent',
-            'Log$1'        => 'Historical'
+            'Agent$main'        => 'Agent',
+            'RuleMatchedLog$0'  => 'Import information',
+            'Log$1'             => 'Historical'
         ];
         $this
          ->given($this->newTestedInstance)
@@ -58,7 +61,15 @@ class Agent extends DbTestCase
             'deviceid'  => 'glpixps-2018-07-09-09-07-13',
             'version'   => 'FusionInventory-Agent_v2.5.2-1.fc31',
             'itemtype'  => 'Computer',
-            'tag'       => '000005'
+            'tag'       => '000005',
+            'port'       => '62354',
+            'enabled-tasks' => [
+                "inventory",
+                "netdiscovery",
+                "netinventory",
+                "remoteinventory",
+                "wakeonlan",
+            ]
         ];
 
         $this
@@ -66,6 +77,82 @@ class Agent extends DbTestCase
             ->then
                ->integer($this->testedInstance->handleAgent($metadata))
                ->isGreaterThan(0);
+
+        // This should also work when inventory type is different than agent linked item type
+        $metadata['itemtype'] = 'Printer';
+
+        $this
+         ->given($this->newTestedInstance)
+            ->then
+               ->integer($this->testedInstance->handleAgent($metadata))
+               ->isGreaterThan(0);
+
+        // In the case the agent is used to submit another item type, we still
+        // need to have access to agent tag but no item should be linked
+        $tag = $this->testedInstance->fields['tag'];
+        $port = $this->testedInstance->fields['port'];
+        $items_id = $this->testedInstance->fields['items_id'];
+        $this->string($tag)->isIdenticalTo('000005');
+        $this->string($port)->isIdenticalTo('62354');
+
+        $this->integer($this->testedInstance->fields['use_module_computer_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_network_discovery'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_network_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_remote_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_wake_on_lan'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_esx_remote_inventory'])->isIdenticalTo(0);
+        $this->integer($this->testedInstance->fields['use_module_package_deployment'])->isIdenticalTo(0);
+        $this->integer($this->testedInstance->fields['use_module_collect_data'])->isIdenticalTo(0);
+    }
+
+    public function testHandleAgentOnUpdate()
+    {
+        $metadata = [
+            'deviceid'  => 'glpixps-2018-07-09-09-07-13',
+            'version'   => 'FusionInventory-Agent_v2.5.2-1.fc31',
+            'itemtype'  => 'Computer',
+            'tag'       => '000006',
+            'port'       => '62354',
+            'enabled-tasks' => [
+                "inventory",
+                "remoteinventory",
+                "wakeonlan",
+                "collect",
+                "esx",
+            ]
+        ];
+
+        $this
+         ->given($this->newTestedInstance)
+            ->then
+               ->integer($this->testedInstance->handleAgent($metadata))
+               ->isGreaterThan(0);
+
+        // This should also work when inventory type is different than agent linked item type
+        $metadata['itemtype'] = 'Printer';
+
+        $this
+         ->given($this->newTestedInstance)
+            ->then
+               ->integer($this->testedInstance->handleAgent($metadata))
+               ->isGreaterThan(0);
+
+        // In the case the agent is used to submit another item type, we still
+        // need to have access to agent tag but no item should be linked
+        $tag = $this->testedInstance->fields['tag'];
+        $port = $this->testedInstance->fields['port'];
+        $items_id = $this->testedInstance->fields['items_id'];
+        $this->string($tag)->isIdenticalTo('000006');
+        $this->string($port)->isIdenticalTo('62354');
+
+        $this->integer($this->testedInstance->fields['use_module_computer_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_network_discovery'])->isIdenticalTo(0);
+        $this->integer($this->testedInstance->fields['use_module_network_inventory'])->isIdenticalTo(0);
+        $this->integer($this->testedInstance->fields['use_module_remote_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_wake_on_lan'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_esx_remote_inventory'])->isIdenticalTo(1);
+        $this->integer($this->testedInstance->fields['use_module_package_deployment'])->isIdenticalTo(0);
+        $this->integer($this->testedInstance->fields['use_module_collect_data'])->isIdenticalTo(1);
     }
 
     public function testAgentFeaturesFromItem()
@@ -84,11 +171,12 @@ class Agent extends DbTestCase
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
          ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
          ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
          ->string['itemtype']->isIdenticalTo('Computer')
          ->string['action']->isIdenticalTo('inventory')
+         ->variable['port']->isIdenticalTo(null)
          ->string['tag']->isIdenticalTo('000005');
         $this->array($metadata['provider'])->hasSize(10);
 
@@ -181,11 +269,12 @@ class Agent extends DbTestCase
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
             ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
             ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
             ->string['itemtype']->isIdenticalTo('Computer')
             ->string['action']->isIdenticalTo('inventory')
+            ->variable['port']->isIdenticalTo(null)
             ->string['tag']->isIdenticalTo('000005');
         $this->array($metadata['provider'])->hasSize(10);
 
@@ -200,6 +289,7 @@ class Agent extends DbTestCase
             ->string['name']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
             ->string['version']->isIdenticalTo('2.5.2-1.fc31')
             ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['tag']->isIdenticalTo('000005')
             ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
         $old_agents_id = $agent['id'];
 
@@ -233,16 +323,162 @@ class Agent extends DbTestCase
 
         //check inventory metadata
         $metadata = $inventory->getMetadata();
-        $this->array($metadata)->hasSize(6)
+        $this->array($metadata)->hasSize(7)
             ->string['deviceid']->isIdenticalTo('glpixps-2022-01-17-11-36-53')
             ->string['version']->isIdenticalTo('GLPI-Agent_v1')
             ->string['itemtype']->isIdenticalTo('Computer')
             ->string['action']->isIdenticalTo('inventory')
+            ->variable['port']->isIdenticalTo(null)
             ->string['tag']->isIdenticalTo('000005');
         $this->array($metadata['provider'])->hasSize(10);
 
         //check old agent has been dropped
         $agent = new \Agent();
         $this->boolean($agent->getFromDB($old_agents_id))->isFalse('Old Agent still exists!');
+    }
+
+    public function testTagFromXML()
+    {
+        //run an inventory
+        $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
+<REQUEST>
+  <CONTENT>
+    <HARDWARE>
+      <NAME>glpixps</NAME>
+      <UUID>25C1BB60-5BCB-11D9-B18F-5404A6A534C4</UUID>
+    </HARDWARE>
+    <BIOS>
+      <MSN>640HP72</MSN>
+      <SSN>000</SSN>
+    </BIOS>
+    <ACCOUNTINFO>
+      <KEYNAME>TAG</KEYNAME>
+      <KEYVALUE>000005</KEYVALUE>
+    </ACCOUNTINFO>
+    <VERSIONCLIENT>FusionInventory-Inventory_v2.4.1-2.fc28</VERSIONCLIENT>
+  </CONTENT>
+  <DEVICEID>glpixps.teclib.infra-2018-10-03-08-42-36</DEVICEID>
+  <QUERY>INVENTORY</QUERY>
+  </REQUEST>";
+
+        $converter = new \Glpi\Inventory\Converter();
+        $data = $converter->convert($xml);
+        $json = json_decode($data);
+
+        $inventory = new \Glpi\Inventory\Inventory($json);
+
+        if ($inventory->inError()) {
+            foreach ($inventory->getErrors() as $error) {
+                var_dump($error);
+            }
+        }
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isEmpty();
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(6)
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['action']->isIdenticalTo('inventory')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['tag']->isIdenticalTo('000005');
+
+        global $DB;
+        //check created agent
+        $agenttype = $DB->request(['FROM' => \AgentType::getTable(), 'WHERE' => ['name' => 'Core']])->current();
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+        $this->array($agent)
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['tag']->isIdenticalTo('000005')
+            ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
+    }
+
+    public function testStaleActions()
+    {
+        //run an inventory
+        $json = json_decode(file_get_contents(self::INV_FIXTURES . 'computer_1.json'));
+        $inventory = new \Glpi\Inventory\Inventory($json);
+
+        if ($inventory->inError()) {
+            foreach ($inventory->getErrors() as $error) {
+                var_dump($error);
+            }
+        }
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isEmpty();
+
+        //check inventory metadata
+        $metadata = $inventory->getMetadata();
+        $this->array($metadata)->hasSize(7)
+            ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
+            ->string['version']->isIdenticalTo('FusionInventory-Agent_v2.5.2-1.fc31')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['action']->isIdenticalTo('inventory')
+            ->variable['port']->isIdenticalTo(null)
+            ->string['tag']->isIdenticalTo('000005');
+        $this->array($metadata['provider'])->hasSize(10);
+
+        global $DB;
+        //check created agent
+        $agenttype = $DB->request(['FROM' => \AgentType::getTable(), 'WHERE' => ['name' => 'Core']])->current();
+        $agents = $DB->request(['FROM' => \Agent::getTable()]);
+        $this->integer(count($agents))->isIdenticalTo(1);
+        $agent = $agents->current();
+        $this->array($agent)
+            ->string['deviceid']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
+            ->string['name']->isIdenticalTo('glpixps-2018-07-09-09-07-13')
+            ->string['version']->isIdenticalTo('2.5.2-1.fc31')
+            ->string['itemtype']->isIdenticalTo('Computer')
+            ->string['tag']->isIdenticalTo('000005')
+            ->integer['agenttypes_id']->isIdenticalTo($agenttype['id']);
+        $old_agents_id = $agent['id'];
+
+        $this
+            ->given($this->newTestedInstance)
+            ->then
+            ->boolean($this->testedInstance->getFromDB($agent['id']))
+            ->isTrue();
+
+        $item = $this->testedInstance->getLinkedItem();
+        $this->object($item)->isInstanceOf('Computer');
+
+        //check default status
+        $this->integer($item->fields['states_id'])->isIdenticalTo(0);
+
+        //create new status
+        $state = new \State();
+        $states_id = $state->add(['name' => 'Stale']);
+        $this->integer($states_id)->isGreaterThan(0);
+
+        //set last agent contact far ago
+        $DB->update(
+            \Agent::getTable(),
+            ['last_contact' => date('Y-m-d H:i:s', strtotime('-1 year'))],
+            ['id' => $agent['id']]
+        );
+
+        //define sale agents actions
+        \Config::setConfigurationValues(
+            'inventory',
+            [
+                'stale_agents_delay' => 1,
+                'stale_agents_action' => exportArrayToDB([
+                    \Glpi\Inventory\Conf::STALE_AGENT_ACTION_STATUS,
+                    \Glpi\Inventory\Conf::STALE_AGENT_ACTION_TRASHBIN
+                ]),
+                'stale_agents_status' => $states_id
+            ]
+        );
+
+        //run crontask
+        $task = new \CronTask();
+        $this->boolean(\Agent::cronCleanoldagents($task))->isTrue();
+
+        //check item has been updated
+        $this->boolean($item->getFromDB($item->fields['id']))->isTrue();
+        $this->integer($item->fields['is_deleted'])->isIdenticalTo(1);
+        $this->integer($item->fields['states_id'])->isIdenticalTo($states_id);
     }
 }

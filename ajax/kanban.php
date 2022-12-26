@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -46,13 +48,15 @@ Html::header_nocache();
 
 Session::checkLoginUser();
 
+/** @global array $_UPOST */
+
 if (!isset($_REQUEST['action'])) {
     Response::sendError(400, "Missing action parameter", Response::CONTENT_TYPE_TEXT_HTML);
 }
 $action = $_REQUEST['action'];
 
 $nonkanban_actions = ['update', 'bulk_add_item', 'add_item', 'move_item', 'show_card_edit_form', 'delete_item', 'load_item_panel',
-    'add_teammember', 'delete_teammember'
+    'add_teammember', 'delete_teammember', 'restore_item'
 ];
 if (isset($_REQUEST['itemtype'])) {
     if (!in_array($_REQUEST['action'], $nonkanban_actions) && !Toolbox::hasTrait($_REQUEST['itemtype'], Kanban::class)) {
@@ -74,9 +78,18 @@ if (isset($itemtype)) {
             return;
         }
     }
-    if (in_array($action, ['update', 'add_teammember', 'delete_teammember', 'load_item_panel'])) {
+    if (in_array($action, ['update', 'load_item_panel', 'delete_teammember'])) {
         $item->getFromDB($_REQUEST['items_id']);
         if (!$item->canUpdateItem()) {
+            // Missing rights
+            http_response_code(403);
+            return;
+        }
+    }
+    if (in_array($action, ['add_teammember'])) {
+        $item->getFromDB($_REQUEST['items_id']);
+        $can_assign = method_exists($item, 'canAssign') ? $item->canAssign() : $item->canUpdateItem();
+        if (!$can_assign) {
            // Missing rights
             http_response_code(403);
             return;
@@ -93,6 +106,14 @@ if (isset($itemtype)) {
         $maybe_deleted = $item->maybeDeleted();
         if (($maybe_deleted && !$item::canDelete()) && (!$maybe_deleted && $item::canPurge())) {
            // Missing rights
+            http_response_code(403);
+            return;
+        }
+    }
+    if ($action === 'restore_item') {
+        $maybe_deleted = $item->maybeDeleted();
+        if (($maybe_deleted && !$item::canDelete())) {
+            // Missing rights
             http_response_code(403);
             return;
         }
@@ -241,6 +262,17 @@ if (($_POST['action'] ?? null) === 'update') {
     $maybe_deleted = $item->maybeDeleted() && !($_REQUEST['force'] ?? false);
     if (($maybe_deleted && $item->canDeleteItem()) || (!$maybe_deleted && $item->canPurgeItem())) {
         $item->delete(['id' => $_POST['items_id']], !$maybe_deleted);
+    } else {
+        http_response_code(403);
+        return;
+    }
+} else if (($_POST['action'] ?? null) === 'restore_item') {
+    $checkParams(['items_id']);
+    $item->getFromDB($_POST['items_id']);
+    // Check if the item can be restored
+    $maybe_deleted = $item->maybeDeleted();
+    if (($maybe_deleted && $item->canDeleteItem())) {
+        $item->restore(['id' => $_POST['items_id']]);
     } else {
         http_response_code(403);
         return;

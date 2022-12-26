@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -83,7 +85,7 @@ class NetworkEquipment extends AbstractInventoryAsset
   <DEVICEID>foo</DEVICEID>
   <QUERY>SNMPQUERY</QUERY>
 </REQUEST>",
-                'asset'  => '{"autoupdatesystems_id":"GLPI Native Inventory","last_inventory_update": "DATE_NOW","contact":"noc@glpi-project.org","cpu":4,"firmware":"5.0(3)N2(4.02b)","location":"paris.pa3","mac":"8c:60:4f:8d:ae:fc","manufacturer":"Cisco","model":"UCS 6248UP 48-Port","name":"ucs6248up-cluster-pa3-B","serial":"SSI1912014B","type":"Networking","uptime":"482 days, 05:42:18.50","ips":["127.0.0.1","10.2.5.10","192.168.12.5"],"locations_id":"paris.pa3","networkequipmentmodels_id":"UCS 6248UP 48-Port","networkequipmenttypes_id":"Networking","manufacturers_id":"Cisco"}'
+                'asset'  => '{"description":"Cisco NX-OS(tm) ucs, Software (ucs-6100-k9-system), Version 5.0(3)N2(4.02b), RELEASE SOFTWARE Copyright (c) 2002-2013 by Cisco Systems, Inc.   Compiled 1/16/2019 18:00:00", "sysdescr":"Cisco NX-OS(tm) ucs, Software (ucs-6100-k9-system), Version 5.0(3)N2(4.02b), RELEASE SOFTWARE Copyright (c) 2002-2013 by Cisco Systems, Inc.   Compiled 1/16/2019 18:00:00", "autoupdatesystems_id":"GLPI Native Inventory","last_inventory_update": "DATE_NOW","contact":"noc@glpi-project.org","cpu":4,"firmware":"5.0(3)N2(4.02b)","location":"paris.pa3","mac":"8c:60:4f:8d:ae:fc","manufacturer":"Cisco","model":"UCS 6248UP 48-Port","name":"ucs6248up-cluster-pa3-B","serial":"SSI1912014B","type":"Networking","uptime":"482 days, 05:42:18.50","ips":["127.0.0.1","10.2.5.10","192.168.12.5"],"locations_id":"paris.pa3","networkequipmentmodels_id":"UCS 6248UP 48-Port","networkequipmenttypes_id":"Networking","manufacturers_id":"Cisco","is_deleted": 0}'
             ], [
                 'xml'   => "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
 <REQUEST>
@@ -152,7 +154,7 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
   <DEVICEID>foo</DEVICEID>
   <QUERY>SNMPQUERY</QUERY>
 </REQUEST>",
-                'asset'  => '{"autoupdatesystems_id":"GLPI Native Inventory","last_inventory_update": "DATE_NOW","cpu":47,"firmware":"12.2(55)SE6","ips":["10.1.0.100","10.1.0.22","10.1.0.41","10.1.0.45","10.1.0.59","10.11.11.1","10.11.11.5","10.11.13.1","10.11.13.5","172.21.0.1","172.21.0.7","172.22.0.1","172.22.0.5","172.23.0.1","172.23.0.5","172.24.0.1","172.24.0.5","172.25.1.15","172.28.200.1","172.28.200.5","172.28.211.5","172.28.215.1","172.28.221.1","185.10.253.65","185.10.253.97","185.10.254.1","185.10.255.146","185.10.255.224","185.10.255.250"],"location":"paris.pa3","mac":"00:23:ac:6a:01:00","manufacturer":"Cisco","model":"Catalyst 3750-24\\/48","name":"3k-1-pa3.teclib.infra","ram":128,"serial":"FOC1243W0ED","type":"Networking","uptime":"103 days, 13:53:28.28","locations_id":"paris.pa3","networkequipmentmodels_id":"Catalyst 3750-24\\/48","networkequipmenttypes_id":"Networking","manufacturers_id":"Cisco"}'
+                'asset'  => '{"autoupdatesystems_id":"GLPI Native Inventory","last_inventory_update":"DATE_NOW","cpu":47,"firmware":"12.2(55)SE6","ips":["10.1.0.100","10.1.0.22","10.1.0.41","10.1.0.45","10.1.0.59","10.11.11.1","10.11.11.5","10.11.13.1","10.11.13.5","172.21.0.1","172.21.0.7","172.22.0.1","172.22.0.5","172.23.0.1","172.23.0.5","172.24.0.1","172.24.0.5","172.25.1.15","172.28.200.1","172.28.200.5","172.28.211.5","172.28.215.1","172.28.221.1","185.10.253.65","185.10.253.97","185.10.254.1","185.10.255.146","185.10.255.224","185.10.255.250"],"location":"paris.pa3","mac":"00:23:ac:6a:01:00","manufacturer":"Cisco","model":"Catalyst 3750-24\/48","name":"3k-1-pa3.teclib.infra","ram":128,"serial":"FOC1243W0ED","type":"Networking","uptime":"103 days, 13:53:28.28","description":"Cisco IOS Software, C3750 Software (C3750-IPSERVICESK9-M), Version 12.2(55)SE6, RELEASE SOFTWARE (fc1)\nTechnical Support: http:\/\/www.cisco.com\/techsupport\nCopyright (c) 1986-2012 by Cisco Systems, Inc.\nCompiled Mon 23-Jul-12 13:22 by prod_rel_team","sysdescr":"Cisco IOS Software, C3750 Software (C3750-IPSERVICESK9-M), Version 12.2(55)SE6, RELEASE SOFTWARE (fc1)\nTechnical Support: http:\/\/www.cisco.com\/techsupport\nCopyright (c) 1986-2012 by Cisco Systems, Inc.\nCompiled Mon 23-Jul-12 13:22 by prod_rel_team","locations_id":"paris.pa3","networkequipmentmodels_id":"Catalyst 3750-24\/48","networkequipmenttypes_id":"Networking","manufacturers_id":"Cisco","is_deleted": 0}'
             ]
         ];
     }
@@ -1211,7 +1213,7 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
         $this->array($inventory->getErrors())->isIdenticalTo([]);
 
         // check port
-        $this->boolean($networkPort->getFromDBByCrit(['name' => 'port28']));
+        $this->boolean($networkPort->getFromDBByCrit(['name' => 'port28']))->isTrue();
         $this->boolean($networkPort_NetworkPort->getFromDBForNetworkPort($networkPort->fields['id']))->isTrue();
     }
 
@@ -1448,7 +1450,8 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
             'instantiation_type' => 'NetworkPortEthernet',
             'items_id'           => $networkEquipments_id,
             'itemtype'           => 'NetworkEquipment',
-            'ifdescr'         => '20',
+            'ifdescr'            => '20',
+            'mac'                => '00:24:b5:bd:c8:02',
         ]);
         $this->integer($ports_id)->isGreaterThan(0);
 
@@ -1459,7 +1462,8 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
             'instantiation_type' => 'NetworkPortEthernet',
             'items_id'           => $networkEquipments_id,
             'itemtype'           => 'NetworkEquipment',
-            'ifdescr'         => '21',
+            'ifdescr'            => '21',
+            'mac'                => '00:24:b5:bd:c8:03',
         ]);
         $this->integer($ports_id)->isGreaterThan(0);
 
@@ -1470,7 +1474,8 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
             'instantiation_type' => 'NetworkPortEthernet',
             'items_id'           => $networkEquipments_id,
             'itemtype'           => 'NetworkEquipment',
-            'ifdescr'         => '22',
+            'ifdescr'            => '22',
+            'mac'                => '00:24:b5:bd:c8:04',
         ]);
         $this->integer($ports_id)->isGreaterThan(0);
 
@@ -1878,5 +1883,729 @@ Compiled Mon 23-Jul-12 13:22 by prod_rel_team</COMMENTS>
         // check port
         $this->boolean($networkPort->getFromDBByCrit(['name' => 'port48']));
         $this->boolean($networkPort_NetworkPort->getFromDBForNetworkPort($networkPort->fields['id']))->isTrue();
+    }
+
+    public function testSysdescr()
+    {
+        $xml_source = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
+        <REQUEST>
+          <CONTENT>
+            <DEVICE>
+              <FIRMWARES>
+                <DESCRIPTION>device firmware</DESCRIPTION>
+                <MANUFACTURER>Cisco</MANUFACTURER>
+                <NAME>UCS 6248UP 48-Port</NAME>
+                <TYPE>device</TYPE>
+                <VERSION>5.0(3)N2(4.02b)</VERSION>
+              </FIRMWARES>
+              <INFO>
+                <COMMENTS>this a sysdescr</COMMENTS>
+                <CONTACT>noc@glpi-project.org</CONTACT>
+                <CPU>4</CPU>
+                <FIRMWARE>5.0(3)N2(4.02b)</FIRMWARE>
+                <ID>0</ID>
+                <LOCATION>paris.pa3</LOCATION>
+                <MAC>8c:60:4f:8d:ae:fc</MAC>
+                <MANUFACTURER>Cisco</MANUFACTURER>
+                <MODEL>UCS 6248UP 48-Port</MODEL>
+                <NAME>ucs6248up-cluster-pa3-B</NAME>
+                <SERIAL>SSI1912014B</SERIAL>
+                <TYPE>NETWORKING</TYPE>
+                <UPTIME>482 days, 05:42:18.50</UPTIME>
+                <IPS>
+                  <IP>127.0.0.1</IP>
+                  <IP>10.2.5.10</IP>
+                  <IP>192.168.12.5</IP>
+                </IPS>
+              </INFO>
+            </DEVICE>
+            <MODULEVERSION>4.1</MODULEVERSION>
+            <PROCESSNUMBER>1</PROCESSNUMBER>
+          </CONTENT>
+          <DEVICEID>foo</DEVICEID>
+          <QUERY>SNMPQUERY</QUERY>
+        </REQUEST>";
+
+          // Import the switch into GLPI
+          $converter = new \Glpi\Inventory\Converter();
+          $data = json_decode($converter->convert($xml_source));
+          $inventory = new \Glpi\Inventory\Inventory($data);
+
+          $this->boolean($inventory->inError())->isFalse();
+          $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+          // check sysdescr
+          $networkequipement = new \NetworkEquipment();
+          $found_np = $networkequipement->find(['name' => "ucs6248up-cluster-pa3-B"]);
+          $this->integer(count($found_np))->isIdenticalTo(1);
+          $first_np = array_pop($found_np);
+          $this->string($first_np['sysdescr'])->isIdenticalTo("this a sysdescr");
+
+          $xml_source = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
+          <REQUEST>
+            <CONTENT>
+              <DEVICE>
+                <FIRMWARES>
+                  <DESCRIPTION>device firmware</DESCRIPTION>
+                  <MANUFACTURER>Cisco</MANUFACTURER>
+                  <NAME>UCS 6248UP 48-Port</NAME>
+                  <TYPE>device</TYPE>
+                  <VERSION>5.0(3)N2(4.02b)</VERSION>
+                </FIRMWARES>
+                <INFO>
+                  <COMMENTS>this a updated sysdescr</COMMENTS>
+                  <CONTACT>noc@glpi-project.org</CONTACT>
+                  <CPU>4</CPU>
+                  <FIRMWARE>5.0(3)N2(4.02b)</FIRMWARE>
+                  <ID>0</ID>
+                  <LOCATION>paris.pa3</LOCATION>
+                  <MAC>8c:60:4f:8d:ae:fc</MAC>
+                  <MANUFACTURER>Cisco</MANUFACTURER>
+                  <MODEL>UCS 6248UP 48-Port</MODEL>
+                  <NAME>ucs6248up-cluster-pa3-B</NAME>
+                  <SERIAL>SSI1912014B</SERIAL>
+                  <TYPE>NETWORKING</TYPE>
+                  <UPTIME>482 days, 05:42:18.50</UPTIME>
+                  <IPS>
+                    <IP>127.0.0.1</IP>
+                    <IP>10.2.5.10</IP>
+                    <IP>192.168.12.5</IP>
+                  </IPS>
+                </INFO>
+              </DEVICE>
+              <MODULEVERSION>4.1</MODULEVERSION>
+              <PROCESSNUMBER>1</PROCESSNUMBER>
+            </CONTENT>
+            <DEVICEID>foo</DEVICEID>
+            <QUERY>SNMPQUERY</QUERY>
+          </REQUEST>";
+
+          // Import the switch into GLPI
+          $converter = new \Glpi\Inventory\Converter();
+          $data = json_decode($converter->convert($xml_source));
+          $inventory = new \Glpi\Inventory\Inventory($data);
+
+          $this->boolean($inventory->inError())->isFalse();
+          $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+          // check sysdescr
+          $networkequipement = new \NetworkEquipment();
+          $found_np = $networkequipement->find(['name' => "ucs6248up-cluster-pa3-B"]);
+          $this->integer(count($found_np))->isIdenticalTo(1);
+          $first_np = array_pop($found_np);
+          $this->string($first_np['sysdescr'])->isIdenticalTo("this a updated sysdescr");
+    }
+
+    public function testSwitchMacConnection1()
+    {
+        $xml_source = '<?xml version="1.0" encoding="UTF-8" ?>
+<REQUEST>
+  <CONTENT>
+    <DEVICE>
+      <INFO>
+        <TYPE>NETWORKING</TYPE>
+        <MANUFACTURER>Hewlett-Packard</MANUFACTURER>
+        <MODEL>J9085A</MODEL>
+        <DESCRIPTION>ProCurve J9085A</DESCRIPTION>
+        <NAME>FR-SW01</NAME>
+        <LOCATION>BAT A - Niv 3</LOCATION>
+        <CONTACT>Admin</CONTACT>
+        <SERIAL>CN536H7J</SERIAL>
+        <FIRMWARE>R.10.06 R.11.60</FIRMWARE>
+        <UPTIME>8 days, 01:48:57.95</UPTIME>
+        <MAC>b4:39:d6:3a:7f:00</MAC>
+        <ID>0</ID>
+        <IPS>
+          <IP>192.168.1.56</IP>
+          <IP>192.168.10.56</IP>
+        </IPS>
+      </INFO>
+      <PORTS>
+        <PORT>
+          <CONNECTIONS>
+            <CONNECTION>
+              <MAC>bc:97:e1:5c:0e:90</MAC>
+            </CONNECTION>
+          </CONNECTIONS>
+          <IFDESCR>gi0/3</IFDESCR>
+          <IFNAME>gi0/3</IFNAME>
+          <IFNUMBER>3</IFNUMBER>
+          <IFSPEED>1000000000</IFSPEED>
+          <IFSTATUS>1</IFSTATUS>
+          <IFINTERNALSTATUS>1</IFINTERNALSTATUS>
+          <IFPORTDUPLEX>2</IFPORTDUPLEX>
+          <IFTYPE>6</IFTYPE>
+          <MAC>b4:39:d6:3b:22:bd</MAC>
+          <VLANS>
+            <VLAN>
+              <NAME>VLAN160</NAME>
+              <NUMBER>160</NUMBER>
+            </VLAN>
+          </VLANS>
+        </PORT>
+      </PORTS>
+    </DEVICE>
+    <MODULEVERSION>3.0</MODULEVERSION>
+    <PROCESSNUMBER>1</PROCESSNUMBER>
+  </CONTENT>
+  <DEVICEID>foo</DEVICEID>
+  <QUERY>SNMPQUERY</QUERY>
+</REQUEST>';
+
+        $computer                = new \Computer();
+        $networkPort             = new \NetworkPort();
+        $networkPort_NetworkPort = new \NetworkPort_NetworkPort();
+
+        // Create a computer
+        $computers_id = $computer->add([
+            'name'   => 'pc002',
+            'serial' => 'ggheb7ne7',
+            'entities_id' => 0
+        ]);
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        // Add some computer ports
+        $ports_id = $networkPort->add([
+            'name'               => 'eth0',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computers_id,
+            'itemtype'           => 'Computer',
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'eth1',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computers_id,
+            'itemtype'           => 'Computer',
+            'mac'                => 'bc:97:e1:5c:0e:91',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // Import the switch into GLPI
+        $converter = new \Glpi\Inventory\Converter();
+        $data = json_decode($converter->convert($xml_source));
+
+        $CFG_GLPI["is_contact_autoupdate"] = 0;
+        $inventory = new \Glpi\Inventory\Inventory($data);
+        $CFG_GLPI["is_contact_autoupdate"] = 1; //reset to default
+
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+        // Verify that eth0 is the only port connected
+        $this->integer(countElementsInTable($networkPort_NetworkPort->getTable()))->isIdenticalTo(1);
+        $this->boolean($networkPort->getFromDBByCrit(['name' => 'eth0']));
+        $this->boolean($networkPort_NetworkPort->getFromDBForNetworkPort($networkPort->fields['id']))->isTrue();
+    }
+
+    public function testSwitchMacConnection2()
+    {
+        $xml_source = '<?xml version="1.0" encoding="UTF-8" ?>
+<REQUEST>
+  <CONTENT>
+    <DEVICE>
+      <INFO>
+        <TYPE>NETWORKING</TYPE>
+        <MANUFACTURER>Hewlett-Packard</MANUFACTURER>
+        <MODEL>J9085A</MODEL>
+        <DESCRIPTION>ProCurve J9085A</DESCRIPTION>
+        <NAME>FR-SW01</NAME>
+        <LOCATION>BAT A - Niv 3</LOCATION>
+        <CONTACT>Admin</CONTACT>
+        <SERIAL>CN536H7J</SERIAL>
+        <FIRMWARE>R.10.06 R.11.60</FIRMWARE>
+        <UPTIME>8 days, 01:48:57.95</UPTIME>
+        <MAC>b4:39:d6:3a:7f:00</MAC>
+        <ID>0</ID>
+        <IPS>
+          <IP>192.168.1.56</IP>
+          <IP>192.168.10.56</IP>
+        </IPS>
+      </INFO>
+      <PORTS>
+        <PORT>
+          <CONNECTIONS>
+            <CONNECTION>
+              <MAC>bc:97:e1:5c:0e:90</MAC>
+              <MAC>00:85:eb:f4:be:20</MAC>
+            </CONNECTION>
+          </CONNECTIONS>
+          <IFDESCR>gi0/3</IFDESCR>
+          <IFNAME>gi0/3</IFNAME>
+          <IFNUMBER>3</IFNUMBER>
+          <IFSPEED>1000000000</IFSPEED>
+          <IFSTATUS>1</IFSTATUS>
+          <IFINTERNALSTATUS>1</IFINTERNALSTATUS>
+          <IFPORTDUPLEX>2</IFPORTDUPLEX>
+          <IFTYPE>6</IFTYPE>
+          <MAC>b4:39:d6:3b:22:bd</MAC>
+          <VLANS>
+            <VLAN>
+              <NAME>VLAN160</NAME>
+              <NUMBER>160</NUMBER>
+            </VLAN>
+          </VLANS>
+        </PORT>
+      </PORTS>
+    </DEVICE>
+    <MODULEVERSION>3.0</MODULEVERSION>
+    <PROCESSNUMBER>1</PROCESSNUMBER>
+  </CONTENT>
+  <DEVICEID>foo</DEVICEID>
+  <QUERY>SNMPQUERY</QUERY>
+</REQUEST>';
+
+        $networkPort             = new \NetworkPort();
+        $unmanaged               = new \Unmanaged();
+        $networkPort_NetworkPort = new \NetworkPort_NetworkPort();
+
+        $computer = getItemByTypeName('Computer', '_test_pc01');
+        $computers_id = $computer->fields['id'];
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        $printer = getItemByTypeName('Printer', '_test_printer_ent0');
+        $printers_id = $printer->fields['id'];
+        $this->integer($printers_id)->isGreaterThan(0);
+
+        // Add some ports
+        $ports_id = $networkPort->add([
+            'name'               => 'eth0',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'eth1',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:91',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'internal',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $printer->fields['id'],
+            'itemtype'           => $printer->getTypeName(1),
+            'mac'                => '00:85:eb:f4:be:20',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // Make sure there are no hubs yet
+        $this->integer(countElementsInTable($unmanaged->getTable()))->isIdenticalTo(0);
+
+        // Import the switch into GLPI
+        $converter = new \Glpi\Inventory\Converter();
+        $data = json_decode($converter->convert($xml_source));
+
+        $CFG_GLPI["is_contact_autoupdate"] = 0;
+        $inventory = new \Glpi\Inventory\Inventory($data);
+        $CFG_GLPI["is_contact_autoupdate"] = 1; //reset to default
+
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+        // Verify that gi0/3, eth0, internal ports are connected to a hub
+        $this->integer(countElementsInTable($unmanaged->getTable()))->isIdenticalTo(1);
+        $this->integer(countElementsInTable($networkPort_NetworkPort->getTable()))->isIdenticalTo(3);
+        foreach (['gi0/3', 'eth0', 'internal'] as $port_name) {
+            $this->boolean($networkPort->getFromDBByCrit(['name' => $port_name]));
+            $this->boolean($networkPort->isHubConnected($networkPort->fields['id']))->isTrue();
+        }
+    }
+
+    public function testSwitchMacConnection3()
+    {
+        $xml_source = '<?xml version="1.0" encoding="UTF-8" ?>
+<REQUEST>
+  <CONTENT>
+    <DEVICE>
+      <INFO>
+        <TYPE>NETWORKING</TYPE>
+        <MANUFACTURER>Hewlett-Packard</MANUFACTURER>
+        <MODEL>J9085A</MODEL>
+        <DESCRIPTION>ProCurve J9085A</DESCRIPTION>
+        <NAME>FR-SW01</NAME>
+        <LOCATION>BAT A - Niv 3</LOCATION>
+        <CONTACT>Admin</CONTACT>
+        <SERIAL>CN536H7J</SERIAL>
+        <FIRMWARE>R.10.06 R.11.60</FIRMWARE>
+        <UPTIME>8 days, 01:48:57.95</UPTIME>
+        <MAC>b4:39:d6:3a:7f:00</MAC>
+        <ID>0</ID>
+        <IPS>
+          <IP>192.168.1.56</IP>
+          <IP>192.168.10.56</IP>
+        </IPS>
+      </INFO>
+      <PORTS>
+        <PORT>
+          <CONNECTIONS>
+            <CONNECTION>
+              <MAC>bc:97:e1:5c:0e:90</MAC>
+            </CONNECTION>
+          </CONNECTIONS>
+          <IFDESCR>gi0/3</IFDESCR>
+          <IFNAME>gi0/3</IFNAME>
+          <IFNUMBER>3</IFNUMBER>
+          <IFSPEED>1000000000</IFSPEED>
+          <IFSTATUS>1</IFSTATUS>
+          <IFINTERNALSTATUS>1</IFINTERNALSTATUS>
+          <IFPORTDUPLEX>2</IFPORTDUPLEX>
+          <IFTYPE>6</IFTYPE>
+          <MAC>b4:39:d6:3b:22:bd</MAC>
+          <VLANS>
+            <VLAN>
+              <NAME>VLAN160</NAME>
+              <NUMBER>160</NUMBER>
+            </VLAN>
+          </VLANS>
+        </PORT>
+      </PORTS>
+    </DEVICE>
+    <MODULEVERSION>3.0</MODULEVERSION>
+    <PROCESSNUMBER>1</PROCESSNUMBER>
+  </CONTENT>
+  <DEVICEID>foo</DEVICEID>
+  <QUERY>SNMPQUERY</QUERY>
+</REQUEST>';
+
+        $networkPort             = new \NetworkPort();
+        $unmanaged               = new \Unmanaged();
+        $networkPort_NetworkPort = new \NetworkPort_NetworkPort();
+
+        $computer = getItemByTypeName('Computer', '_test_pc01');
+        $computers_id = $computer->fields['id'];
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        // Add some ports
+        $ports_id = $networkPort->add([
+            'name'               => 'eth0',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'eth1',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:91',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // add a virtual port (logical_number=0) with the same mac as eth0
+        $ports_id = $networkPort->add([
+            'name'               => 'eth0:srv',
+            'logical_number'     => '0',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // Import the switch into GLPI
+        $converter = new \Glpi\Inventory\Converter();
+        $data = json_decode($converter->convert($xml_source));
+
+        $CFG_GLPI["is_contact_autoupdate"] = 0;
+        $inventory = new \Glpi\Inventory\Inventory($data);
+        $CFG_GLPI["is_contact_autoupdate"] = 1; //reset to default
+
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+        // Make sure there are no hubs
+        $this->integer(countElementsInTable($unmanaged->getTable()))->isIdenticalTo(0);
+
+        // Verify that eth0 is the only port connected
+        $this->integer(countElementsInTable($networkPort_NetworkPort->getTable()))->isIdenticalTo(1);
+        $this->boolean($networkPort->getFromDBByCrit(['name' => 'eth0']));
+        $this->boolean($networkPort_NetworkPort->getFromDBForNetworkPort($networkPort->fields['id']))->isTrue();
+    }
+
+    public function testSwitchMacConnection4()
+    {
+        $xml_source = '<?xml version="1.0" encoding="UTF-8" ?>
+<REQUEST>
+  <CONTENT>
+    <DEVICE>
+      <INFO>
+        <TYPE>NETWORKING</TYPE>
+        <MANUFACTURER>Hewlett-Packard</MANUFACTURER>
+        <MODEL>J9085A</MODEL>
+        <DESCRIPTION>ProCurve J9085A</DESCRIPTION>
+        <NAME>FR-SW01</NAME>
+        <LOCATION>BAT A - Niv 3</LOCATION>
+        <CONTACT>Admin</CONTACT>
+        <SERIAL>CN536H7J</SERIAL>
+        <FIRMWARE>R.10.06 R.11.60</FIRMWARE>
+        <UPTIME>8 days, 01:48:57.95</UPTIME>
+        <MAC>b4:39:d6:3a:7f:00</MAC>
+        <ID>0</ID>
+        <IPS>
+          <IP>192.168.1.56</IP>
+          <IP>192.168.10.56</IP>
+        </IPS>
+      </INFO>
+      <PORTS>
+        <PORT>
+          <CONNECTIONS>
+            <CONNECTION>
+              <MAC>bc:97:e1:5c:0e:90</MAC>
+              <MAC>fe:54:00:dd:1d:4f</MAC>
+              <MAC>fe:54:00:c0:97:8a</MAC>
+              <MAC>fe:54:00:ff:04:b5</MAC>
+            </CONNECTION>
+          </CONNECTIONS>
+          <IFDESCR>gi0/3</IFDESCR>
+          <IFNAME>gi0/3</IFNAME>
+          <IFNUMBER>3</IFNUMBER>
+          <IFSPEED>1000000000</IFSPEED>
+          <IFSTATUS>1</IFSTATUS>
+          <IFINTERNALSTATUS>1</IFINTERNALSTATUS>
+          <IFPORTDUPLEX>2</IFPORTDUPLEX>
+          <IFTYPE>6</IFTYPE>
+          <MAC>b4:39:d6:3b:22:bd</MAC>
+          <VLANS>
+            <VLAN>
+              <NAME>VLAN160</NAME>
+              <NUMBER>160</NUMBER>
+            </VLAN>
+          </VLANS>
+        </PORT>
+      </PORTS>
+    </DEVICE>
+    <MODULEVERSION>3.0</MODULEVERSION>
+    <PROCESSNUMBER>1</PROCESSNUMBER>
+  </CONTENT>
+  <DEVICEID>foo</DEVICEID>
+  <QUERY>SNMPQUERY</QUERY>
+</REQUEST>';
+
+        $networkPort             = new \NetworkPort();
+        $unmanaged               = new \Unmanaged();
+        $networkPort_NetworkPort = new \NetworkPort_NetworkPort();
+
+        $computer = getItemByTypeName('Computer', '_test_pc01');
+        $computers_id = $computer->fields['id'];
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        // Add some ports
+        $ports_id = $networkPort->add([
+            'name'               => 'eth0',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'eth1',
+            'logical_number'     => '1',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:91',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // add a virtual port (logical_number=0) with the same mac as eth0
+        $ports_id = $networkPort->add([
+            'name'               => 'ovs-bridge',
+            'logical_number'     => '0',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'bc:97:e1:5c:0e:90',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // add another virtual port
+        $ports_id = $networkPort->add([
+            'name'               => 'vnet13',
+            'logical_number'     => '0',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'fe:54:00:dd:1d:4f',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // add another virtual port
+        $ports_id = $networkPort->add([
+            'name'               => 'vnet15',
+            'logical_number'     => '0',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'fe:54:00:c0:97:8a',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // add another virtual port
+        $ports_id = $networkPort->add([
+            'name'               => 'vnet21',
+            'logical_number'     => '0',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $computer->fields['id'],
+            'itemtype'           => $computer->getTypeName(1),
+            'mac'                => 'fe:54:00:ff:04:b5',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        // Import the switch into GLPI
+        $converter = new \Glpi\Inventory\Converter();
+        $data = json_decode($converter->convert($xml_source));
+
+        $CFG_GLPI["is_contact_autoupdate"] = 0;
+        $inventory = new \Glpi\Inventory\Inventory($data);
+        $CFG_GLPI["is_contact_autoupdate"] = 1; //reset to default
+
+        $this->boolean($inventory->inError())->isFalse();
+        $this->array($inventory->getErrors())->isIdenticalTo([]);
+
+        // Make sure there are no hubs
+        $this->integer(countElementsInTable($unmanaged->getTable()))->isIdenticalTo(0);
+
+        // Verify that eth0 is the only port connected
+        $this->integer(countElementsInTable($networkPort_NetworkPort->getTable()))->isIdenticalTo(1);
+        $this->boolean($networkPort->getFromDBByCrit(['name' => 'eth0']));
+        $this->boolean($networkPort_NetworkPort->getFromDBForNetworkPort($networkPort->fields['id']))->isTrue();
+    }
+
+    public function testPrepareConnectionsProvider()
+    {
+        $networkEquipment = new \NetworkEquipment();
+        $networkPort      = new \NetworkPort();
+
+        $networkEquipments_id = $networkEquipment->add([
+            'entities_id' => 0,
+            'name'        => 'sw001',
+        ]);
+        $this->integer($networkEquipments_id)->isGreaterThan(0);
+
+        $mngtports_id = $networkPort->add([
+            'items_id'           => $networkEquipments_id,
+            'itemtype'           => 'NetworkEquipment',
+            'instantiation_type' => 'NetworkPortAggregate',
+            'name'               => 'management',
+            'mac'                => '2c:fa:a2:d1:b2:28',
+        ]);
+        $this->integer($mngtports_id)->isGreaterThan(0);
+
+        $ports_id = $networkPort->add([
+            'name'               => 'port47',
+            'logical_number'     => '1047',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $networkEquipments_id,
+            'itemtype'           => 'NetworkEquipment',
+            'ifdescr'            => '47',
+            'mac'                => '2c:fa:a2:d1:b2:99',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+
+        return [
+            ['json_source' =>
+                '{
+                  "content": {
+                      "network_ports": [
+                         {
+                            "connections": [
+                               {
+                                  "ifdescr": "port47",
+                                  "ifnumber": 1047,
+                                  "sysdescr": "sw001",
+                                  "sysmac": "2c:fa:a2:d1:b2:28"
+                               }
+                            ],
+                            "ifnumber": 2,
+                            "lldp": true
+                         }
+                      ]
+                   }
+                }'
+            ],
+            ['json_source' =>
+                '{
+                  "content": {
+                      "network_ports": [
+                         {
+                            "connections": [
+                               {
+                                  "ifdescr": "port47",
+                                  "mac": "2c:fa:a2:d1:b2:99",
+                                  "sysdescr": "sw001",
+                                  "sysmac": "2c:fa:a2:d1:b2:28"
+                               }
+                            ],
+                            "ifnumber": 2,
+                            "lldp": true
+                         }
+                      ]
+                   }
+                }'
+            ],
+            ['json_source' =>
+                '{
+                  "content": {
+                      "network_ports": [
+                         {
+                            "connections": [
+                               {
+                                  "ifdescr": "port47",
+                                  "sysdescr": "sw001",
+                                  "sysmac": "2c:fa:a2:d1:b2:28"
+                               }
+                            ],
+                            "ifnumber": 2,
+                            "lldp": true
+                         }
+                      ]
+                   }
+                }'
+            ],
+        ];
+    }
+
+    /**
+     * @dataProvider testPrepareConnectionsProvider
+     */
+    public function testPrepareConnections($json_source)
+    {
+        $json = json_decode($json_source);
+
+        $networkEquipment = getItemByTypeName('NetworkEquipment', '_test_networkequipment_1');
+
+        $asset = new \Glpi\Inventory\Asset\NetworkPort($networkEquipment, (array)$json->content->network_ports);
+
+        $result = $asset->prepare();
+        $this->array($result)->hasSize(1);
+
+        $connections = $asset->getPart('connections');
+        $this->array($connections)->hasSize(1);
+
+        $networkPort = current(current($connections));
+        $this->boolean(property_exists($networkPort, 'logical_number'))->isTrue();
+        $this->integer($networkPort->logical_number)->isEqualTo(1047);
     }
 }

@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -1319,7 +1321,8 @@ class CronTask extends CommonDBTM
         global $DB;
 
         if (isset($_GET["crontasklogs_id"]) && $_GET["crontasklogs_id"]) {
-            return $this->showHistoryDetail($_GET["crontasklogs_id"]);
+            $this->showHistoryDetail($_GET["crontasklogs_id"]);
+            return;
         }
 
         if (isset($_GET["start"])) {
@@ -1565,8 +1568,8 @@ class CronTask extends CommonDBTM
 
         switch ($ma->getAction()) {
             case 'reset':
-                if (Config::canUpdate()) {
-                    foreach ($ids as $key) {
+                foreach ($ids as $key) {
+                    if (Config::canUpdate()) {
                         if ($item->getFromDB($key)) {
                             if ($item->resetDate()) {
                                  $ma->itemDone($item->getType(), $key, MassiveAction::ACTION_OK);
@@ -1578,10 +1581,10 @@ class CronTask extends CommonDBTM
                             $ma->itemDone($item->getType(), $key, MassiveAction::ACTION_KO);
                             $ma->addMessage($item->getErrorMessage(ERROR_NOT_FOUND));
                         }
+                    } else {
+                        $ma->itemDone($item->getType(), $key, MassiveAction::ACTION_NORIGHT);
+                        $ma->addMessage($item->getErrorMessage(ERROR_RIGHT));
                     }
-                } else {
-                    $ma->itemDone($item->getType(), $key, MassiveAction::ACTION_NORIGHT);
-                    $ma->addMessage($item->getErrorMessage(ERROR_RIGHT));
                 }
                 return;
         }
@@ -1917,7 +1920,7 @@ class CronTask extends CommonDBTM
 
        //first step unlike only file if needed
         foreach ($files as $filename) {
-            if (basename($filename) == "remove.txt" && is_dir(GLPI_ROOT . '/.git')) {
+            if (basename($filename) == ".gitkeep") {
                 continue;
             }
 
@@ -2080,6 +2083,8 @@ class CronTask extends CommonDBTM
                     'parameter'   => __("Number of days to keep archived logs")
                 ];
         }
+
+        return [];
     }
 
 

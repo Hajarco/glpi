@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -267,7 +269,11 @@ final class DbUtils
             $itemtype = null;
             if (class_exists($base_itemtype)) {
                 $class_file = (new ReflectionClass($base_itemtype))->getFileName();
-                $is_glpi_class = $class_file !== false && str_starts_with(realpath($class_file), realpath(GLPI_ROOT));
+                $is_glpi_class = $class_file !== false && (
+                    str_starts_with(realpath($class_file), realpath(GLPI_ROOT))
+                    || str_starts_with(realpath($class_file), realpath(GLPI_MARKETPLACE_DIR))
+                    || str_starts_with(realpath($class_file), realpath(GLPI_PLUGIN_DOC_DIR))
+                );
                 if ($is_glpi_class) {
                     $itemtype = $base_itemtype;
                 }
@@ -301,14 +307,16 @@ final class DbUtils
      */
     public function fixItemtypeCase(string $itemtype, $root_dir = GLPI_ROOT)
     {
+        global $GLPI_CACHE;
 
-       // If a class exists for this itemtype, just return the declared class name.
-        $matches = preg_grep('/^' . preg_quote($itemtype) . '$/i', get_declared_classes());
+        // If a class exists for this itemtype, just return the declared class name.
+        $matches = preg_grep('/^' . preg_quote($itemtype, '/') . '$/i', get_declared_classes());
         if (count($matches) === 1) {
             return current($matches);
         }
 
-        static $files = [];
+        static $mapping = []; // Mappings already retrieved in current request
+        static $already_scanned = []; // Directories already scanned directories in current request
 
         $context = 'glpi-core';
         $plugin_matches = [];
@@ -317,19 +325,54 @@ final class DbUtils
            // indeed, we must be able to separate plugin name (directory) from class name (file)
            // so pattern must be the one provided by getItemTypeForTable: PluginDirectorynameClassname
             $context = strtolower($plugin_matches['plugin']);
-        } else if (preg_match('/^' . preg_quote(NS_PLUG) . '(?<plugin>[a-z]+)\\\/i', $itemtype, $plugin_matches)) {
+        } else if (preg_match('/^' . preg_quote(NS_PLUG, '/') . '(?<plugin>[a-z]+)\\\/i', $itemtype, $plugin_matches)) {
             $context = strtolower($plugin_matches['plugin']);
         }
 
-        if (!array_key_exists($context, $files)) {
-           // Fetch filenames from "src" directory of context (GLPI core or given plugin).
-            $files[$context] = [];
+        $namespace      = $context === 'glpi-core' ? NS_GLPI : NS_PLUG . ucfirst($context) . '\\';
+        $uses_namespace = preg_match('/^(' . preg_quote($namespace, '/') . ')/i', $itemtype);
 
-            $srcdir = $root_dir . ($context === 'glpi-core' ? '' : '/plugins/' . $context) . '/src';
-            if (!is_dir($srcdir)) {
-               // Cannot search in files if dir not exists (can correspond to a deleted plugin)
-                return $itemtype;
-            }
+        $expected_lc_path = str_ireplace(
+            [$namespace, '\\'],
+            [''        , DIRECTORY_SEPARATOR],
+            strtolower($itemtype) . '.php'
+        );
+
+        $cache_key = sprintf('itemtype-case-mapping-%s', $context);
+
+        if (!array_key_exists($context, $mapping)) {
+            // Initialize mapping from persistent cache if it has not been done yet in current request
+            $mapping[$context] = $GLPI_CACHE->get($cache_key);
+        }
+
+        if ($mapping[$context] !== null && array_key_exists($expected_lc_path, $mapping[$context])) {
+            // Return known value, if any
+            return ($uses_namespace ? $namespace : '') . $mapping[$context][$expected_lc_path];
+        }
+
+        if (
+            (
+                $mapping[$context] !== null
+                && ($_SESSION['glpi_use_mode'] ?? null) !== Session::DEBUG_MODE
+                && !defined('TU_USER')
+            )
+            || in_array($context, $already_scanned)
+        ) {
+            // Do not scan class files if mapping was already cached, unless debug mode is used.
+            //
+            // It will prevent a scan on all files when method is used on an unexisting itemtype
+            // which would never be present in cached mapping as it would have no matching file.
+            // This case can happen when database contains obsolete data, or when a plugin calls
+            // `getItemForItemtype()` for an invalid itemtype.
+            //
+            // Skip also files scan if it has already been done in current request.
+            return $itemtype;
+        }
+
+        // Fetch filenames from "src" directory of context (GLPI core or given plugin).
+        $mapping[$context] = [];
+        $srcdir = $root_dir . ($context === 'glpi-core' ? '' : '/plugins/' . $context) . '/src';
+        if (is_dir($srcdir)) {
             $files_iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($srcdir),
                 RecursiveIteratorIterator::SELF_FIRST
@@ -341,10 +384,10 @@ final class DbUtils
                 }
                 $relative_path = str_replace($srcdir . DIRECTORY_SEPARATOR, '', $file->getPathname());
 
-                // Sore into files list:
-                // - key is the lowercased filename;
+                // Store entry into mapping:
+                // - key is the lowercased filepath;
                 // - value is the classname with correct case.
-                $files[$context][strtolower($relative_path)] = str_replace(
+                $mapping[$context][strtolower($relative_path)] = str_replace(
                     [DIRECTORY_SEPARATOR, '.php'],
                     ['\\',                ''],
                     $relative_path
@@ -352,20 +395,13 @@ final class DbUtils
             }
         }
 
-        $namespace      = $context === 'glpi-core' ? NS_GLPI : NS_PLUG . ucfirst($context) . '\\';
-        $uses_namespace = preg_match('/^(' . preg_quote($namespace) . ')/i', $itemtype);
+        $already_scanned[] = $context;
 
-        $expected_lc_path = str_ireplace(
-            [$namespace, '\\'],
-            [''        , DIRECTORY_SEPARATOR],
-            strtolower($itemtype) . '.php'
-        );
+        $GLPI_CACHE->set($cache_key, $mapping[$context]);
 
-        if (array_key_exists($expected_lc_path, $files[$context])) {
-            $itemtype = ($uses_namespace ? $namespace : '') . $files[$context][$expected_lc_path];
-        }
-
-        return $itemtype;
+        return array_key_exists($expected_lc_path, $mapping[$context])
+            ? ($uses_namespace ? $namespace : '') . $mapping[$context][$expected_lc_path]
+            : $itemtype;
     }
 
 
@@ -1569,7 +1605,7 @@ final class DbUtils
             ($link == 1)
             && ($ID > 0)
         ) {
-            $before = "<a title=\"" . Toolbox::addslashes_deep($formatted) . "\"
+            $before = "<a title=\"" . htmlspecialchars($formatted) . "\"
                        href='" . User::getFormURLWithID($ID) . "'>";
             $after  = "</a>";
         }
@@ -1653,6 +1689,7 @@ final class DbUtils
                         $user_params = array_merge($user_params, [
                             'email'              => UserEmail::getDefaultForUser($ID),
                             'phone'              => $data["phone"],
+                            'phone2'             => $data["phone2"],
                             'mobile'             => $data["mobile"],
                             'locations_id'       => $data['locations_id'],
                             'usertitles_id'      => $data['usertitles_id'],
@@ -1706,7 +1743,7 @@ final class DbUtils
         }
 
         $matches = [];
-        if (mb_ereg('^<[^#]*(#{1,10})[^#]*>$', $objectName, $matches) === false) {
+        if (preg_match('/^<[^#]*(#{1,10})[^#]*>$/', $objectName, $matches) !== 1) {
             return $base_name;
         }
 
@@ -1958,6 +1995,7 @@ final class DbUtils
      */
     public function getDbRelations()
     {
+        $RELATION = []; // Redefined inside /inc/relation.constant.php
 
         include(GLPI_ROOT . "/inc/relation.constant.php");
 

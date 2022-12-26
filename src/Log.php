@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -228,7 +230,7 @@ class Log extends CommonDBTM
 
         if ($uid = Session::getLoginUserID(false)) {
             if (is_numeric($uid)) {
-                $username = sprintf(__('%1$s (%2$s)'), getUserName($uid), $uid);
+                $username = User::getNameForLog($uid);
             } else { // For cron management
                 $username = $uid;
             }
@@ -241,7 +243,7 @@ class Log extends CommonDBTM
             $username = sprintf(
                 __('%1$s impersonated by %2$s'),
                 $username,
-                sprintf(__('%1$s (%2$s)'), getUserName($impersonator_id), $impersonator_id)
+                User::getNameForLog($impersonator_id)
             );
         }
 
@@ -641,7 +643,7 @@ class Log extends CommonDBTM
                         $tmp['change'] = sprintf(
                             __('%1$s: %2$s'),
                             $action_label,
-                            sprintf(__('%1$s (%2$s)'), $tmp['field'], $data["new_value"])
+                            sprintf(__('%1$s (%2$s)'), $tmp['field'], $data["old_value"])
                         );
                         break;
 

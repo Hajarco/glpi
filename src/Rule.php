@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -88,6 +90,8 @@ class Rule extends CommonDBTM
     const PATTERN_UNDER           = 11;
     const PATTERN_NOT_UNDER       = 12;
     const PATTERN_IS_EMPTY        = 30; // Global criteria
+    const PATTERN_CIDR            = 333;
+    const PATTERN_NOT_CIDR        = 334;
 
     const AND_MATCHING            = "AND";
     const OR_MATCHING             = "OR";
@@ -218,6 +222,7 @@ class Rule extends CommonDBTM
         if (
             Session::haveRight("rule_ldap", READ)
             || Session::haveRight("rule_import", READ)
+            || Session::haveRight("rule_location", READ)
             || Session::haveRight("rule_ticket", READ)
             || Session::haveRight("rule_softwarecategories", READ)
             || Session::haveRight("rule_mailcollector", READ)
@@ -487,6 +492,18 @@ class Rule extends CommonDBTM
             if (RuleDictionnaryDropdown::canCreate()) {
                 $menu['dictionnary']['options']['os_arch']['links']['add']
                               = '/front/ruledictionnaryoperatingsystemarchitecture.form.php';
+            }
+
+            $menu['dictionnary']['options']['os_edition']['title']
+            = OperatingSystemEdition::getTypeName(1);
+            $menu['dictionnary']['options']['os_edition']['page']
+                        = '/front/ruledictionnaryoperatingsystemedition.php';
+            $menu['dictionnary']['options']['os_edition']['links']['search']
+                        = '/front/ruledictionnaryoperatingsystemedition.php';
+
+            if (RuleDictionnaryDropdown::canCreate()) {
+                $menu['dictionnary']['options']['os_edition']['links']['add']
+                        = '/front/ruledictionnaryoperatingsystemedition.form.php';
             }
 
             $menu['dictionnary']['options']['printer']['title']
@@ -2261,11 +2278,11 @@ class Rule extends CommonDBTM
 
         // Some data may come from the database, and be sanitized (i.e. html special chars already encoded),
         // but some data may have been build from translation or from some plugin code and may be not sanitized.
-        // First, extract the verbatim value (i.e. with non encoded specia chars), then encode entities to
+        // First, extract the verbatim value (i.e. with non encoded specia chars), then encode special chars to
         // ensure HTML validity (and to prevent XSS).
-        $text  = "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($criterion)) . "</td>";
-        $text .= "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($condition)) . "</td>";
-        $text .= "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($pattern)) . "</td>";
+        $text  = "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($criterion)) . "</td>";
+        $text .= "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($condition)) . "</td>";
+        $text .= "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($pattern)) . "</td>";
         return $text;
     }
 
@@ -2284,11 +2301,11 @@ class Rule extends CommonDBTM
 
         // Some data may come from the database, and be sanitized (i.e. html special chars already encoded),
         // but some data may have been build from translation or from some plugin code and may be not sanitized.
-        // First, extract the verbatim value (i.e. with non encoded specia chars), then encode entities to
+        // First, extract the verbatim value (i.e. with non encoded specia chars), then encode special chars to
         // ensure HTML validity (and to prevent XSS).
-        $text  = "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($field)) . "</td>";
-        $text .= "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($type)) . "</td>";
-        $text .= "<td $addtotd>" . Html::entities_deep(Sanitizer::getVerbatimValue($value)) . "</td>";
+        $text  = "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($field)) . "</td>";
+        $text .= "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($type)) . "</td>";
+        $text .= "<td $addtotd>" . Sanitizer::encodeHtmlSpecialChars(Sanitizer::getVerbatimValue($value)) . "</td>";
         return $text;
     }
 
@@ -2530,7 +2547,7 @@ class Rule extends CommonDBTM
             self::PATTERN_DOES_NOT_EXISTS,
             RuleImportAsset::PATTERN_ENTITY_RESTRICT,
             RuleImportAsset::PATTERN_NETWORK_PORT_RESTRICT,
-            RuleImportAsset::PATTERN_ONLY_CRITERIA_RULE
+            RuleImportAsset::PATTERN_ONLY_CRITERIA_RULE,
         ];
         if (in_array($condition, $hiddens)) {
             echo Html::hidden($name, ['value' => 1]);

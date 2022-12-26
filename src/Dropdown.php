@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -153,8 +155,7 @@ class Dropdown
             $name = $params['toadd'][$params['value']];
         } else if (
             !$params['multiple']
-            && $params['value'] > 0
-            || ($itemtype == "Entity" && $params['value'] >= 0)
+            && ($params['value'] > 0 || ($itemtype == "Entity" && $params['value'] >= 0))
         ) {
             $tmpname = self::getDropdownName($table, $params['value'], 1);
 
@@ -176,7 +177,8 @@ class Dropdown
         }
 
         if ($params['readonly']) {
-            return '<span class="form-control" readonly>'
+            return '<span class="form-control" readonly'
+                . ($params['width'] ? 'style="width: ' . $params["width"] . '"' : '') . '>'
                 . ($params['multiple'] ? implode(', ', $names) : $name)
                 . '</span>';
         }
@@ -250,14 +252,26 @@ class Dropdown
             }
         }
 
-        $output .= Html::jsAjaxDropdown(
-            $params['name'],
-            $field_id,
-            $params['url'],
-            $p
-        );
+        // Add icon
+        $add_item_icon = "";
+        if (
+            ($item instanceof CommonDropdown)
+            && $item->canCreate()
+            && !isset($_REQUEST['_in_modal'])
+            && $params['addicon']
+        ) {
+            $add_item_icon .= '<div class="btn btn-outline-secondary"
+                           title="' . __s('Add') . '" data-bs-toggle="modal" data-bs-target="#add_' . $field_id . '">';
+            $add_item_icon .= Ajax::createIframeModalWindow('add_' . $field_id, $item->getFormURL(), ['display' => false]);
+            $add_item_icon .= "<span data-bs-toggle='tooltip'>
+              <i class='fa-fw ti ti-plus'></i>
+              <span class='sr-only'>" . __s('Add') . "</span>
+                </span>";
+            $add_item_icon .= '</div>';
+        }
+
        // Display comment
-        $icons = "";
+        $icon_array = [];
         if ($params['comments']) {
             $comment_id      = Html::cleanId("comment_" . $params['name'] . $params['rand']);
             $link_id         = Html::cleanId("comment_link_" . $params['name'] . $params['rand']);
@@ -297,7 +311,7 @@ class Dropdown
             }
 
             // Comment icon
-            $icons .= Ajax::updateItemOnSelectEvent(
+            $comment_icon = Ajax::updateItemOnSelectEvent(
                 $field_id,
                 $comment_id,
                 $CFG_GLPI["root_doc"] . "/ajax/comments.php",
@@ -305,7 +319,8 @@ class Dropdown
                 false
             );
             $options_tooltip['link_class'] = 'btn btn-outline-secondary';
-            $icons .= Html::showToolTip($comment, $options_tooltip);
+            $comment_icon .= Html::showToolTip($comment, $options_tooltip);
+            $icon_array[] = $comment_icon;
 
             // Add icon
             if (
@@ -314,71 +329,101 @@ class Dropdown
                 && !isset($_REQUEST['_in_modal'])
                 && $params['addicon']
             ) {
-                  $icons .= '<div class="btn btn-outline-secondary"
-                               title="' . __s('Add') . '" data-bs-toggle="modal" data-bs-target="#add_' . $field_id . '">';
-                  $icons .= Ajax::createIframeModalWindow('add_' . $field_id, $item->getFormURL(), ['display' => false]);
-                  $icons .= "<span data-bs-toggle='tooltip'>
-                  <i class='fa-fw ti ti-plus'></i>
-                  <span class='sr-only'>" . __s('Add') . "</span>
-               </span>";
-                  $icons .= '</div>';
+                  $icon_array[] = $add_item_icon;
             }
 
            // Supplier Links
             if ($itemtype == "Supplier") {
                 if ($item->getFromDB($params['value'])) {
-                    $icons .= '<div>';
-                    $icons .= $item->getLinks();
-                    $icons .= '</div>';
+                    $link_icon = '<div>';
+                    $link_icon .= $item->getLinks();
+                    $link_icon .= '</div>';
+                    $icon_array[] = $link_icon;
                 }
             }
 
            // Location icon
             if ($itemtype == 'Location') {
-                $icons .= '<div class="btn btn-outline-secondary">';
-                $icons .= "<span title='" . __s('Display on map') . "' data-bs-toggle='tooltip' onclick='showMapForLocation(this)' data-fid='$field_id'>
+                $location_icon = '<div class="btn btn-outline-secondary">';
+                $location_icon .= "<span title='" . __s('Display on map') . "' data-bs-toggle='tooltip' onclick='showMapForLocation(this)' data-fid='$field_id'>
                <i class='fa-fw ti ti-map'></i>
             </span>";
-                $icons .= '</div>';
+                $location_icon .= '</div>';
+                $icon_array[] = $location_icon;
             }
 
             if ($params['display_dc_position']) {
                 if ($rack = $item->isRackPart($itemtype, $params['value'], true)) {
-                    $icons .= "<span id='" . $breadcrumb_id . "' title='" . __s('Display on datacenter') . "'>";
-                    $icons .= "&nbsp;<a class='fas fa-crosshairs' href='" . $rack->getLinkURL() . "'></a>";
-                    $icons .= "</span>";
+                    $dc_icon = "<span id='" . $breadcrumb_id . "' title='" . __s('Display on datacenter') . "'>";
+                    $dc_icon .= "&nbsp;<a class='fas fa-crosshairs' href='" . $rack->getLinkURL() . "'></a>";
+                    $dc_icon .= "</span>";
                     $paramscomment['with_dc_position'] = $breadcrumb_id;
+                    $icon_array[] = $dc_icon;
                 }
             }
 
            // KB links
             if (
-                $item->isField('knowbaseitemcategories_id') && Session::haveRight('knowbase', READ)
+                $item->isField('knowbaseitemcategories_id') && Session::haveRightsOr('knowbase', [READ, KnowbaseItem::READFAQ])
                 && method_exists($item, 'getLinks')
             ) {
-                $paramskblinks = [
-                    'value'       => '__VALUE__',
-                    'itemtype'    => $itemtype,
-                    '_idor_token' => Session::getNewIDORToken($itemtype),
-                    'withlink'    => $kblink_id,
-                ];
-                $icons .= '<div>';
-                $icons .= Ajax::updateItemOnSelectEvent(
-                    $field_id,
-                    $kblink_id,
-                    $CFG_GLPI["root_doc"] . "/ajax/kblink.php",
-                    $paramskblinks,
-                    false
-                );
-                $icons .= "<span id='$kblink_id'>";
-                $icons .= '&nbsp;' . $item->getLinks();
-                $icons .= "</span>";
-                $icons .= '</div>';
+                // With the self-service profile, $item (whose itemtype = ITILCategory) is empty,
+                //  as the profile does not have rights to ITILCategory to initialise it before.
+                if ($item->isNewItem()) {
+                    $item->getFromDB($params['value']);
+                }
+                if ($itemlinks = $item->getLinks()) {
+                    $paramskblinks = [
+                        'value'       => '__VALUE__',
+                        'itemtype'    => $itemtype,
+                        '_idor_token' => Session::getNewIDORToken($itemtype),
+                        'withlink'    => $kblink_id,
+                    ];
+                    $kb_link_icon = '<div class="btn btn-outline-secondary">';
+                    $kb_link_icon .= Ajax::updateItemOnSelectEvent(
+                        $field_id,
+                        $kblink_id,
+                        $CFG_GLPI["root_doc"] . "/ajax/kblink.php",
+                        $paramskblinks,
+                        false
+                    );
+                    $kb_link_icon .= "<span id='$kblink_id'>";
+                    $kb_link_icon .= $itemlinks;
+                    $kb_link_icon .= "</span>";
+                    $kb_link_icon .= '</div>';
+                    $icon_array[] = $kb_link_icon;
+                }
             }
         }
 
-        if (strlen($icons) > 0) {
-            $output = "<div class='btn-group btn-group-sm " . ($params['width'] == "100%" ? "w-100" : "") . "' role='group'>{$output} {$icons}</div>";
+        // Trick to get the "+" button to work with dropdowns that support multiple values
+        if (count($icon_array) === 0 && $add_item_icon !== '') {
+            $icon_array[] = $add_item_icon;
+        }
+
+        if (count($icon_array) > 0) {
+            $icon_count = count($icon_array);
+            $original_width = $params['width'];
+            if ($original_width === '100%') {
+                $calc_width = "calc(100% - (({$icon_count} * 0.9em) + (18px * {$icon_count})))";
+                $p['width'] = $calc_width;
+            }
+            $output .= Html::jsAjaxDropdown(
+                $params['name'],
+                $field_id,
+                $params['url'],
+                $p
+            );
+            $icons = implode('', $icon_array);
+            $output = "<div class='btn-group btn-group-sm' role='group'
+                style='width: {$original_width}'>{$output} {$icons}</div>";
+        } else {
+            $output .= Html::jsAjaxDropdown(
+                $params['name'],
+                $field_id,
+                $params['url'],
+                $p
+            );
         }
 
         $output .= Ajax::commonDropdownUpdateItem($params, false);
@@ -819,6 +864,7 @@ class Dropdown
                         $values[$file] = $file;
                     }
                 }
+                $rand = mt_rand();
                 self::showFromArray(
                     $myname,
                     $values,
@@ -826,11 +872,35 @@ class Dropdown
                         [
                             'value'                 => $value,
                             'display_emptychoice'   => true,
-                            'display'               => $display
+                            'display'               => $display,
+                            'noselect2'             => true, // we will instanciate it later
+                            'rand'                  => $rand,
                         ],
                         $options
                     )
                 );
+
+                global $CFG_GLPI;
+
+                // templates for select2 dropdown
+                $js = <<<JAVASCRIPT
+                $(function() {
+                    const formatFormIcon = function(icon) {
+                        if (!icon.id || icon.id == '0') {
+                            return icon.text;
+                        }
+                        var img = '<span><img alt="" src="{$CFG_GLPI['typedoc_icon_dir']}/'+icon.id+'" />';
+                        var label = '<span>'+icon.text+'</span>';
+                        return $(img+'&nbsp;'+label);
+                    };
+                    $("#dropdown_{$myname}{$rand}").select2({
+                        width: '60%',
+                        templateSelection: formatFormIcon,
+                        templateResult: formatFormIcon
+                    });
+                });
+JAVASCRIPT;
+                echo Html::scriptBlock($js);
             } else {
                //TRANS: %s is the store path
                 printf(__('Error reading directory %s'), $store_path);
@@ -1095,7 +1165,8 @@ class Dropdown
                 __('Management') => [
                     'DocumentCategory' => null,
                     'DocumentType' => null,
-                    'BusinessCriticity' => null
+                    'BusinessCriticity' => null,
+                    'DatabaseInstanceCategory' => null,
                 ],
 
                 __('Tools') => [
@@ -1459,6 +1530,7 @@ class Dropdown
         $params['checkright']          = false;
         $params['toupdate']            = '';
         $params['display']             = true;
+        $params['track_changes']       = true;
 
         if (is_array($options) && count($options)) {
             foreach ($options as $key => $val) {
@@ -1490,6 +1562,7 @@ class Dropdown
                 'emptylabel'          => $params['emptylabel'],
                 'display'             => $params['display'],
                 'rand'                => $params['rand'],
+                'track_changes'       => $params['track_changes'],
             ]);
         }
         return 0;
@@ -1524,19 +1597,20 @@ class Dropdown
         global $CFG_GLPI;
 
         $params = [];
-        $params['itemtype_name']       = 'itemtype';
-        $params['items_id_name']       = 'items_id';
-        $params['itemtypes']           = '';
-        $params['default_itemtype']    = 0;
-        $params['entity_restrict']     = -1;
-        $params['onlyglobal']          = false;
-        $params['checkright']          = false;
-        $params['showItemSpecificity'] = '';
-        $params['emptylabel']          = self::EMPTY_VALUE;
-        $params['used']                = [];
-        $params['ajax_page']           = $CFG_GLPI["root_doc"] . "/ajax/dropdownAllItems.php";
-        $params['display']             = true;
-        $params['rand']                = mt_rand();
+        $params['itemtype_name']          = 'itemtype';
+        $params['items_id_name']          = 'items_id';
+        $params['itemtypes']              = '';
+        $params['default_itemtype']       = 0;
+        $params['entity_restrict']        = -1;
+        $params['onlyglobal']             = false;
+        $params['checkright']             = false;
+        $params['showItemSpecificity']    = '';
+        $params['emptylabel']             = self::EMPTY_VALUE;
+        $params['used']                   = [];
+        $params['ajax_page']              = $CFG_GLPI["root_doc"] . "/ajax/dropdownAllItems.php";
+        $params['display']                = true;
+        $params['rand']                   = mt_rand();
+        $params['itemtype_track_changes'] = false;
 
         if (is_array($options) && count($options)) {
             foreach ($options as $key => $val) {
@@ -1545,11 +1619,12 @@ class Dropdown
         }
 
         $select = self::showItemType($params['itemtypes'], [
-            'checkright' => $params['checkright'],
-            'name'       => $params['itemtype_name'],
-            'emptylabel' => $params['emptylabel'],
-            'display'    => $params['display'],
-            'rand'       => $params['rand'],
+            'checkright'    => $params['checkright'],
+            'name'          => $params['itemtype_name'],
+            'emptylabel'    => $params['emptylabel'],
+            'display'       => $params['display'],
+            'rand'          => $params['rand'],
+            'track_changes' => $params['itemtype_track_changes'],
         ]);
 
         $p_ajax = [
@@ -2004,6 +2079,7 @@ class Dropdown
         $param['noselect2']           = false;
         $param['templateResult']      = "templateResult";
         $param['templateSelection']   = "templateSelection";
+        $param['track_changes']       = "true";
 
         if (is_array($options) && count($options)) {
             if (isset($options['value']) && strlen($options['value'])) {
@@ -2052,7 +2128,7 @@ class Dropdown
                     $to_display[] = $elements[$value];
                 }
             }
-            $output .= '<span class="form-control" readonly>' . implode(', ', $to_display) . '</span>';
+            $output .= '<span class="form-control" readonly style="width: ' . $param["width"] . '">' . implode(', ', $to_display) . '</span>';
         } else {
             $output  .= "<select name='$field_name' id='$field_id'";
 
@@ -2082,6 +2158,10 @@ class Dropdown
 
             if ($param["required"]) {
                 $output .= " required='required'";
+            }
+
+            if (!$param['track_changes']) {
+                $output .= " data-track-changes=''";
             }
 
             $output .= '>';
@@ -2218,7 +2298,7 @@ class Dropdown
      * @param string  $name   select name
      * @param integer $value  default value (default 0)
      *
-     * @return string|integer HTML output, or random part of dropdown ID.
+     * @return void
      **/
     public static function showFrequency($name, $value = 0)
     {
@@ -3239,7 +3319,7 @@ class Dropdown
                     } else if ($item instanceof CommonDCModelDropdown) {
                         $outputval = sprintf(__('%1$s - %2$s'), $data[$field], $data['product_number']);
                     } else {
-                        $outputval = $data[$field];
+                        $outputval = $data[$field] ?? "";
                     }
 
                     $ID         = $data['id'];
@@ -3553,9 +3633,9 @@ class Dropdown
 
         if (isset($_POST['searchText']) && (strlen($post['searchText']) > 0)) {
             $search = ['LIKE', Search::makeTextSearchValue($post['searchText'])];
-            $orwhere = [
+            $orwhere = $item->isField('name') ? [
                 'name'   => $search
-            ];
+            ] : [];
             if (is_int($post['searchText']) || (is_string($post['searchText'] && ctype_digit($post['searchText'])))) {
                 $orwhere[] = ['id' => $post['searchText']];
             }
@@ -3816,27 +3896,33 @@ class Dropdown
             $post['page_limit'] = $CFG_GLPI['dropdown_max'];
         }
 
-        $entity_restrict = -1;
-        if (isset($post['entity_restrict'])) {
-            $entity_restrict = Toolbox::jsonDecode($post['entity_restrict']);
-        }
+        if (isset($post['_one_id']) && $post['_one_id'] > 0) {
+            $user = new User();
+            $user->getFromDB($post['_one_id']);
+            $result = [$user->fields];
+        } else {
+            $entity_restrict = -1;
+            if (isset($post['entity_restrict'])) {
+                $entity_restrict = Toolbox::jsonDecode($post['entity_restrict']);
+            }
 
-        $start  = intval(($post['page'] - 1) * $post['page_limit']);
-        $searchText = (isset($post['searchText']) ? $post['searchText'] : null);
-        $inactive_deleted = isset($post['inactive_deleted']) ? $post['inactive_deleted'] : 0;
-        $with_no_right = isset($post['with_no_right']) ? $post['with_no_right'] : 0;
-        $result = User::getSqlSearchResult(
-            false,
-            $post['right'],
-            $entity_restrict,
-            $post['value'],
-            $used,
-            $searchText,
-            $start,
-            (int)$post['page_limit'],
-            $inactive_deleted,
-            $with_no_right
-        );
+            $start  = intval(($post['page'] - 1) * $post['page_limit']);
+            $searchText = (isset($post['searchText']) ? $post['searchText'] : null);
+            $inactive_deleted = isset($post['inactive_deleted']) ? $post['inactive_deleted'] : 0;
+            $with_no_right = isset($post['with_no_right']) ? $post['with_no_right'] : 0;
+            $result = User::getSqlSearchResult(
+                false,
+                $post['right'],
+                $entity_restrict,
+                $post['value'],
+                $used,
+                $searchText,
+                $start,
+                (int)$post['page_limit'],
+                $inactive_deleted,
+                $with_no_right
+            );
+        }
 
         $users = [];
 
@@ -3898,6 +3984,8 @@ class Dropdown
 
     public static function getDropdownActors($post, $json = true)
     {
+        global $CFG_GLPI;
+
         if (!Session::validateIDOR($post)) {
             return;
         }
@@ -3914,6 +4002,7 @@ class Dropdown
             'itiltemplate_class' => 'TicketTemplate',
             'itiltemplates_id'   => 0,
             'returned_itemtypes' => ['User', 'Group', 'Supplier'],
+            'page_limit'         => $CFG_GLPI['dropdown_max'],
         ];
         $post = array_merge($defaults, $post);
 
@@ -4044,11 +4133,20 @@ class Dropdown
         ]);
 
         $results = $hook_results['actors'] ?? [];
+        $total_results = count($results);
+
+        $start = ($post['page'] - 1) * $post['page_limit'];
+        $results = array_slice($results, $start, $post['page_limit']);
 
         $return = [
             'results' => $results,
             'count'   => count($results),
         ];
+        if ($total_results > count($results)) {
+            $return['pagination'] = [
+                'more' => true,
+            ];
+        }
 
         return ($json === true)
          ? json_encode($return)

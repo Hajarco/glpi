@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -542,6 +544,24 @@ class Migration extends \GLPITestCase
                 ],
             ], [
                 'table'     => 'my_table',
+                'field'     => 'othertables_id',
+                'format'    => 'fkey',
+                'options'   => [],
+                'sql'       => "ALTER TABLE `my_table` ADD `othertables_id` INT  NOT NULL DEFAULT 0   ",
+                'db_properties' => [
+                    'allow_signed_keys' => true,
+                ],
+            ], [
+                'table'     => 'my_table',
+                'field'     => 'othertables_id',
+                'format'    => 'fkey',
+                'options'   => [],
+                'sql'       => "ALTER TABLE `my_table` ADD `othertables_id` INT unsigned NOT NULL DEFAULT 0   ",
+                'db_properties' => [
+                    'allow_signed_keys' => false,
+                ],
+            ], [
+                'table'     => 'my_table',
                 'field'     => 'my_field',
                 'format'    => "INT NOT NULL DEFAULT '42'",
                 'options'   => [],
@@ -858,7 +878,7 @@ class Migration extends \GLPITestCase
                 ->message
                 ->contains('Table "glpi_someoldtypes" does not exists.');
             }
-        )->isEqualTo('Rename "SomeOldType" itemtype to "NewName"');
+        )->isEqualTo('Renaming "SomeOldType" itemtype to "NewName"...');
     }
 
     /**
@@ -882,7 +902,7 @@ class Migration extends \GLPITestCase
                 ->message
                 ->contains('Table "glpi_someoldtypes" cannot be renamed as table "glpi_newnames" already exists.');
             }
-        )->isEqualTo('Rename "SomeOldType" itemtype to "NewName"');
+        )->isEqualTo('Renaming "SomeOldType" itemtype to "NewName"...');
     }
 
     /**
@@ -915,7 +935,7 @@ class Migration extends \GLPITestCase
                 ->message
                 ->contains('Field "someoldtypes_id" cannot be renamed in table "glpi_item_with_fkey" as "newnames_id" is field already exists.');
             }
-        )->isEqualTo('Rename "SomeOldType" itemtype to "NewName"');
+        )->isEqualTo('Renaming "SomeOldType" itemtype to "NewName"...');
     }
 
     /**
@@ -971,10 +991,10 @@ class Migration extends \GLPITestCase
             implode(
                 '',
                 [
-                    'Rename "SomeOldType" itemtype to "NewName"',
-                    'Rename "glpi_someoldtypes" table to "glpi_newnames"',
-                    'Rename "someoldtypes_id" foreign keys to "newnames_id" in all tables',
-                    'Rename "SomeOldType" itemtype to "NewName" in all tables',
+                    'Renaming "SomeOldType" itemtype to "NewName"...',
+                    'Renaming "glpi_someoldtypes" table to "glpi_newnames"...',
+                    'Renaming "someoldtypes_id" foreign keys to "newnames_id" in all tables...',
+                    'Renaming "SomeOldType" itemtype to "NewName" in all tables...',
                     'Change of the database layout - glpi_oneitem_with_fkey',
                     'Change of the database layout - glpi_anotheritem_with_fkey',
                     'Task completed.',
@@ -1005,8 +1025,8 @@ class Migration extends \GLPITestCase
             implode(
                 '',
                 [
-                    'Rename "SomeOldType" itemtype to "NewName"',
-                    'Rename "SomeOldType" itemtype to "NewName" in all tables',
+                    'Renaming "SomeOldType" itemtype to "NewName"...',
+                    'Renaming "SomeOldType" itemtype to "NewName" in all tables...',
                     'Task completed.',
                 ]
             )
@@ -1018,6 +1038,32 @@ class Migration extends \GLPITestCase
             "UPDATE `glpi_stuffs` SET `itemtype_source` = 'NewName' WHERE `itemtype_source` = 'SomeOldType'",
             "UPDATE `glpi_stuffs` SET `itemtype_dest` = 'NewName' WHERE `itemtype_dest` = 'SomeOldType'",
         ]);
+
+        // Test renaming when old class and new class have the same table name
+        $this->queries = [];
+
+        $this->output(
+            function () {
+                $this->migration->renameItemtype('PluginFooThing', 'GlpiPlugin\\Foo\\Thing');
+                $this->migration->executeMigration();
+            }
+        )->isIdenticalTo(
+            implode(
+                '',
+                [
+                    'Renaming "PluginFooThing" itemtype to "GlpiPlugin\\Foo\\Thing"...',
+                    'Renaming "PluginFooThing" itemtype to "GlpiPlugin\\Foo\\Thing" in all tables...',
+                    'Task completed.',
+                ]
+            )
+        );
+
+        $this->array($this->queries)->isIdenticalTo([
+            "UPDATE `glpi_computers` SET `itemtype` = 'GlpiPlugin\\Foo\\Thing' WHERE `itemtype` = 'PluginFooThing'",
+            "UPDATE `glpi_users` SET `itemtype` = 'GlpiPlugin\\Foo\\Thing' WHERE `itemtype` = 'PluginFooThing'",
+            "UPDATE `glpi_stuffs` SET `itemtype_source` = 'GlpiPlugin\\Foo\\Thing' WHERE `itemtype_source` = 'PluginFooThing'",
+            "UPDATE `glpi_stuffs` SET `itemtype_dest` = 'GlpiPlugin\\Foo\\Thing' WHERE `itemtype_dest` = 'PluginFooThing'",
+        ]);
     }
 
     public function testChangeSearchOption()
@@ -1026,41 +1072,38 @@ class Migration extends \GLPITestCase
         $DB = $this->db;
 
         $this->calling($this->db)->request = function ($request) {
-            if (!isset($request['FROM'])) {
-                  return new \ArrayIterator([]);
+            if (isset($request['INNER JOIN'])) {
+                $result = [];
+                if ($request['INNER JOIN'][\DisplayPreference::getTable() . ' AS old']['ON'][0]['AND']['new.itemtype'] === 'Printer') {
+                    // Simulate duplicated search options on 'Printer'
+                    $result = [
+                        [
+                            'id' => 12,
+                        ],
+                        [
+                            'id' => 156,
+                        ],
+                        [
+                            'id' => 421,
+                        ]
+                    ];
+                }
+                return new \ArrayIterator($result);
             }
-            if ($request['FROM'] === \DisplayPreference::getTable()) {
-                 return new \ArrayIterator([
-                     [
-                         'id'        => 0,
-                         'itemtype'  => 'Computer',
-                         'num'       => 40,
-                     ],
-                     [
-                         'id'        => 1,
-                         'itemtype'  => 'Computer',
-                         'num'       => 41,
-                     ],
-                     [
-                         'id'        => 2,
-                         'itemtype'  => 'Monitor',
-                         'num'       => 40,
-                     ]
-                 ]);
-            } else if ($request['FROM'] === \SavedSearch::getTable()) {
+            if ($request['FROM'] === \SavedSearch::getTable()) {
                 return new \ArrayIterator([
                     [
-                        'id'        => 0,
+                        'id'        => 1,
                         'itemtype'  => 'Computer',
                         'query'     => 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=40&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Budget&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=4&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer'
                     ],
                     [
-                        'id'        => 1,
+                        'id'        => 2,
                         'itemtype'  => 'Budget',
                         'query'     => 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=40&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Computer&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=40&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer'
                     ],
                     [
-                        'id'        => 2,
+                        'id'        => 3,
                         'itemtype'  => 'Monitor',
                         'query'     => 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=40&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Budget&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=40&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Monitor'
                     ]
@@ -1070,6 +1113,7 @@ class Migration extends \GLPITestCase
         };
 
         $this->migration->changeSearchOption('Computer', 40, 100);
+        $this->migration->changeSearchOption('Printer', 20, 10);
 
         $this->output(
             function () {
@@ -1079,8 +1123,88 @@ class Migration extends \GLPITestCase
 
         $this->array($this->queries)->isIdenticalTo([
             "UPDATE `glpi_displaypreferences` SET `num` = '100' WHERE `itemtype` = 'Computer' AND `num` = '40'",
-            "UPDATE `glpi_savedsearches` SET `query` = 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=100&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Budget&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=4&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer' WHERE `id` = '0'",
-            "UPDATE `glpi_savedsearches` SET `query` = 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=40&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Computer&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=100&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer' WHERE `id` = '1'",
+            "DELETE `glpi_displaypreferences` FROM `glpi_displaypreferences` WHERE `id` IN ('12', '156', '421')",
+            "UPDATE `glpi_displaypreferences` SET `num` = '10' WHERE `itemtype` = 'Printer' AND `num` = '20'",
+            "UPDATE `glpi_savedsearches` SET `query` = 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=100&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Budget&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=4&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer' WHERE `id` = '1'",
+            "UPDATE `glpi_savedsearches` SET `query` = 'is_deleted=0&as_map=0&criteria%5B0%5D%5Blink%5D=AND&criteria%5B0%5D%5Bfield%5D=40&criteria%5B0%5D%5Bsearchtype%5D=contains&criteria%5B0%5D%5Bvalue%5D=LT1&criteria%5B1%5D%5Blink%5D=AND&criteria%5B1%5D%5Bitemtype%5D=Computer&criteria%5B1%5D%5Bmeta%5D=1&criteria%5B1%5D%5Bfield%5D=100&criteria%5B1%5D%5Bsearchtype%5D=contains&criteria%5B1%5D%5Bvalue%5D=&search=Search&itemtype=Computer' WHERE `id` = '2'",
         ]);
+    }
+
+    public function testUpdateRight()
+    {
+        global $DB;
+
+        $DB->delete('glpi_profilerights', [
+            'name' => [
+                'testright1', 'testright2', 'testright3'
+            ]
+        ]);
+
+        //Test updating a UPDATE right when profile has READ and UPDATE config right (Default)
+        $this->output(
+            function () {
+                $this->migration->updateRight('testright1', READ);
+            }
+        )->isEqualTo('Rights has been updated for testright1, you should review ACLs after update');
+
+        $right1 = $DB->request([
+            'FROM' => 'glpi_profilerights',
+            'WHERE'  => [
+                'name'   => 'testright1',
+                'rights' => READ
+            ]
+        ]);
+        $this->integer(count($right1))->isEqualTo(1);
+
+        //Test updating a READ right when profile has UPDATE group right
+        $this->output(
+            function () {
+                $this->migration->updateRight('testright2', READ, ['group' => UPDATE]);
+            }
+        )->isEqualTo('Rights has been updated for testright2, you should review ACLs after update');
+
+        $right1 = $DB->request([
+            'FROM' => 'glpi_profilerights',
+            'WHERE'  => [
+                'name'   => 'testright2',
+                'rights' => READ
+            ]
+        ]);
+        $this->integer(count($right1))->isEqualTo(2);
+
+        //Test updating an UPDATE right when profile has READ and UPDATE group right and CREATE entity right
+        $this->output(
+            function () {
+                $this->migration->updateRight('testright2', UPDATE, [
+                    'group'  => READ | UPDATE,
+                    'entity' => CREATE
+                ]);
+            }
+        )->isEqualTo('Rights has been updated for testright2, you should review ACLs after update');
+
+        $right1 = $DB->request([
+            'FROM' => 'glpi_profilerights',
+            'WHERE'  => [
+                'name'   => 'testright2',
+                'rights' => UPDATE
+            ]
+        ]);
+        $this->integer(count($right1))->isEqualTo(1);
+
+        //Test updating a READ right when profile with no requirements
+        $this->output(
+            function () {
+                $this->migration->updateRight('testright3', READ, []);
+            }
+        )->isEqualTo('Rights has been updated for testright3, you should review ACLs after update');
+
+        $right1 = $DB->request([
+            'FROM' => 'glpi_profilerights',
+            'WHERE'  => [
+                'name'   => 'testright3',
+                'rights' => READ
+            ]
+        ]);
+        $this->integer(count($right1))->isEqualTo(8);
     }
 }

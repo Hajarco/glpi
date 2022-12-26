@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -100,6 +102,21 @@ class Sanitizer extends \GLPITestCase
             'htmlencoded_value' => '&#60;p&#62;HTML containing a code snippet&#60;/p&#62;&#60;pre&#62;&#38;lt;a href=&#38;quot;/test&#38;quot;&#38;gt;link&#38;lt;/a&#38;gt;&#60;/pre&#62;',
             'dbescaped_value'   => '<p>HTML containing a code snippet</p><pre>&lt;a href=&quot;/test&quot;&gt;link&lt;/a&gt;</pre>',
         ];
+        yield [
+            'value'             => 'text many backslashes ' . str_repeat('\\', 3), // 3 backslashes
+            'sanitized_value'   => 'text many backslashes ' . str_repeat('\\', 6), // escaped to 6 backslashes
+            'htmlencoded_value' => 'text many backslashes ' . str_repeat('\\', 3),
+            'dbescaped_value'   => 'text many backslashes ' . str_repeat('\\', 6),
+        ];
+
+        // Long string with many escapable chars should not be a problem
+        $multiplier = 100000;
+        yield [
+            'value'             => str_repeat("<strong>text with slashable chars ' \n \"</strong>", $multiplier),
+            'sanitized_value'   => str_repeat("&#60;strong&#62;text with slashable chars \' \\n \\\"&#60;/strong&#62;", $multiplier),
+            'htmlencoded_value' => str_repeat("&#60;strong&#62;text with slashable chars ' \n \"&#60;/strong&#62;", $multiplier),
+            'dbescaped_value'   => str_repeat("<strong>text with slashable chars \' \\n \\\"</strong>", $multiplier),
+        ];
 
         // Strings in array should be sanitized
         yield [
@@ -125,7 +142,7 @@ class Sanitizer extends \GLPITestCase
             'sanitized_value' => ['itemtype' => 'Glpi\Dashboard\Dashboard'],
         ];
 
-        //  syntax should not be sanitized
+        // callable syntax should not be sanitized
         yield [
             'value'           => 'Glpi\Socket:update',
             'sanitized_value' => 'Glpi\Socket:update',

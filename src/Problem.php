@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -310,9 +312,17 @@ class Problem extends CommonITILObject
                     $input = $this->setTechAndGroupFromItilCategory($input);
                     break;
             }
-
-            $input = $this->assign($input);
         }
+
+        return $input;
+    }
+
+
+    public function prepareInputForUpdate($input)
+    {
+        $input = $this->transformActorsInput($input);
+
+        $input = parent::prepareInputForUpdate($input);
 
         return $input;
     }
@@ -320,7 +330,7 @@ class Problem extends CommonITILObject
 
     public function post_addItem()
     {
-        global $CFG_GLPI, $DB;
+        global $DB;
 
         parent::post_addItem();
 
@@ -360,20 +370,7 @@ class Problem extends CommonITILObject
             }
         }
 
-       // Processing Email
-        if (!isset($this->input['_disablenotif']) && $CFG_GLPI["use_notifications"]) {
-           // Clean reload of the problem
-            $this->getFromDB($this->fields['id']);
-
-            $type = "new";
-            if (
-                isset($this->fields["status"])
-                && in_array($this->input["status"], $this->getSolvedStatusArray())
-            ) {
-                $type = "solved";
-            }
-            NotificationEvent::raiseEvent($type, $this);
-        }
+        $this->handleNewItemNotifications();
 
         if (
             isset($this->input['_from_items_id'])
@@ -647,56 +644,6 @@ class Problem extends CommonITILObject
         ];
 
         return $tab;
-    }
-
-    /**
-     * @since 0.84
-     *
-     * @param $field
-     * @param $values
-     * @param $options   array
-     **/
-    public static function getSpecificValueToDisplay($field, $values, array $options = [])
-    {
-
-        if (!is_array($values)) {
-            $values = [$field => $values];
-        }
-
-        switch ($field) {
-            case 'status':
-                return Problem::getStatus($values[$field]);
-        }
-        return parent::getSpecificValueToDisplay($field, $values, $options);
-    }
-
-
-    /**
-     * @since 0.84
-     *
-     * @param $field
-     * @param $name            (default '')
-     * @param $values          (default '')
-     * @param $options   array
-     *
-     * @return string
-     **/
-    public static function getSpecificValueToSelect($field, $name = '', $values = '', array $options = [])
-    {
-
-        if (!is_array($values)) {
-            $values = [$field => $values];
-        }
-        $options['display'] = false;
-
-        switch ($field) {
-            case 'status':
-                return Problem::dropdownStatus(['name' => $name,
-                    'value' => $values[$field],
-                    'display' => false
-                ]);
-        }
-        return parent::getSpecificValueToSelect($field, $name, $values, $options);
     }
 
     /**

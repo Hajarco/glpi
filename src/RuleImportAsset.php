@@ -2,13 +2,15 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2010-2022 by the FusionInventory Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +18,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -151,6 +154,9 @@ class RuleImportAsset extends Rule
             ],
             'osname' => [
                 'name'            => sprintf('%s > %s', _n('Asset', 'Assets', 1), OperatingSystem::getTypeName(1)),
+            ],
+            'oscomment' => [
+                'name'            => sprintf('%s > %s > %s', _n('Asset', 'Assets', 1), OperatingSystem::getTypeName(1), __('Comments'))
             ],
             'itemtype' => [
                 'name'            => sprintf('%s > %s', _n('Asset', 'Assets', 1), __('Item type')),
@@ -325,8 +331,6 @@ class RuleImportAsset extends Rule
 
             case Rule::PATTERN_EXISTS:
             case Rule::PATTERN_DOES_NOT_EXISTS:
-            case Rule::PATTERN_FIND:
-            case RuleImportAsset::PATTERN_IS_EMPTY:
                 Dropdown::showYesNo($name, 1, 0);
                 return true;
         }
@@ -375,7 +379,7 @@ class RuleImportAsset extends Rule
             $criteria = $this->getCriteriaByID($criterion);
             if (!empty($criteria)) {
                 foreach ($criteria as $crit) {
-                    if (!isset($input[$criterion]) || $input[$criterion] == '') {
+                    if (!isset($input[$criterion]) || ($input[$criterion] == '' && $crit->fields['condition'] != self::PATTERN_IS_EMPTY)) {
                         $definition_criteria = $this->getCriteria($crit->fields['criteria']);
                         if ($crit->fields["criteria"] == 'link_criteria_port') {
                             $this->link_criteria_port = true;
@@ -389,7 +393,7 @@ class RuleImportAsset extends Rule
                             trigger_error('A value seems missing, criterion was: ' . $criterion, E_USER_WARNING);
                             return false;
                         }
-                    } else if ($crit->fields["condition"] == Rule::PATTERN_FIND) {
+                    } else if (in_array($crit->fields["condition"], [Rule::PATTERN_FIND, Rule::PATTERN_IS_EMPTY])) {
                         $this->complex_criteria[] = $crit;
                         ++$this->found_criteria;
                     } else if ($crit->fields["condition"] == Rule::PATTERN_EXISTS) {
@@ -407,6 +411,10 @@ class RuleImportAsset extends Rule
                     }
                 }
             }
+        }
+
+        foreach ($this->getCriteriaByID('tag') as $crit) {
+            $this->complex_criteria[] = $crit;
         }
 
         foreach ($this->getCriteriaByID('states_id') as $crit) {
@@ -468,7 +476,7 @@ class RuleImportAsset extends Rule
         ) {
             $itemtypeselected[] = $input['itemtype'];
         } else {
-            foreach ($CFG_GLPI["state_types"] as $itemtype) {
+            foreach ($CFG_GLPI["asset_types"] as $itemtype) {
                 if (
                     class_exists($itemtype)
                     && $itemtype != 'SoftwareLicense'
@@ -534,9 +542,9 @@ class RuleImportAsset extends Rule
             $result_glpi = $DB->request($it_criteria);
 
             if (count($result_glpi)) {
+                $this->criterias_results['found_port'] = [];
                 foreach ($result_glpi as $data) {
                     $this->criterias_results['found_inventories'][$itemtype][] = $data['id'];
-                    $this->criterias_results['found_port'] = 0;
                     foreach ($data as $alias => $value) {
                         if (
                             strstr($alias, "portid")
@@ -544,7 +552,7 @@ class RuleImportAsset extends Rule
                             && is_numeric($value)
                             && $value > 0
                         ) {
-                            $this->criterias_results['found_port'] = $value;
+                            $this->criterias_results['found_port'][] = $value;
                         }
                     }
                 }
@@ -766,6 +774,21 @@ class RuleImportAsset extends Rule
                     $it_criteria['WHERE'][] = [$ntable . '.logical_number' => $input['ifnumber']];
                     break;
 
+                case 'tag':
+                    if (isset($input['tag']) && isset($input['deviceid'])) {
+                        $it_criteria['LEFT JOIN']['glpi_agents'] = [
+                            'ON'  => [
+                                'glpi_agents'  => 'items_id',
+                                $itemtable     => 'id'
+                            ]
+                        ];
+                        $it_criteria['WHERE'][] = [
+                            'glpi_agents.deviceid' => $input['deviceid'],
+                            'glpi_agents.tag' => $input['tag']
+                        ];
+                    }
+                    break;
+
                 case 'serial':
                     $serial = $input['serial'];
                     $conf = new Glpi\Inventory\Conf();
@@ -831,7 +854,16 @@ class RuleImportAsset extends Rule
                     break;
 
                 case 'uuid':
-                    $it_criteria['WHERE'][] = ['uuid' => $input['uuid']];
+                    if ($criterion->fields['condition'] == self::PATTERN_IS_EMPTY) {
+                        $it_criteria['WHERE'][] = [
+                            'OR' => [
+                                ["$itemtable.uuid" => ''],
+                                ["$itemtable.uuid" => null]
+                            ]
+                        ];
+                    } else {
+                        $it_criteria['WHERE'][] = ["$itemtable.uuid" => $input['uuid']];
+                    }
                     break;
 
                 case 'device_id':
@@ -913,10 +945,14 @@ class RuleImportAsset extends Rule
                         }
                     }
 
-                    if ($class && !isset($params['return'])) {
-                        $class->rulepassed("0", "Unmanaged", $rules_id);
+                    $back_class = Unmanaged::class;
+                    if (is_a($class, \Glpi\Inventory\Asset\MainAsset::class)) {
+                        $back_class = $class->getItemtype();
                     }
-                    $output['found_inventories'] = [0, 'Unmanaged', $rules_id];
+                    if ($class && !isset($params['return'])) {
+                        $class->rulepassed("0", $back_class, $rules_id);
+                    }
+                    $output['found_inventories'] = [0, $back_class, $rules_id];
                     return $output;
                 }
 
@@ -929,14 +965,15 @@ class RuleImportAsset extends Rule
                              $items_id = current($inventory);
                              $output['found_inventories'] = [$items_id, $itemtype, $rules_id];
                             if (!isset($params['return'])) {
-                                $inputrulelog = $inputrulelog + [
-                                    'items_id'  => $items_id,
-                                    'itemtype'  => $itemtype
-                                ];
-                                $rulesmatched->add($inputrulelog);
-                                $rulesmatched->cleanOlddata($items_id, $itemtype);
                                 if ($class) {
                                     $class->rulepassed($items_id, $itemtype, $rules_id, $this->criterias_results['found_port']);
+                                } else {
+                                    $inputrulelog = $inputrulelog + [
+                                        'items_id'  => $items_id,
+                                        'itemtype'  => $itemtype
+                                    ];
+                                    $rulesmatched->add($inputrulelog);
+                                    $rulesmatched->cleanOlddata($items_id, $itemtype);
                                 }
                             }
                             return $output;
@@ -956,10 +993,14 @@ class RuleImportAsset extends Rule
                             }
                         }
 
-                        if ($class && !isset($params['return'])) {
-                            $class->rulepassed("0", "Unmanaged", $rules_id);
+                        $back_class = Unmanaged::class;
+                        if (is_a($class, \Glpi\Inventory\Asset\MainAsset::class)) {
+                            $back_class = $class->getItemtype();
                         }
-                        $output['found_inventories'] = [0, "Unmanaged", $rules_id];
+                        if ($class && !isset($params['return'])) {
+                            $class->rulepassed("0", $back_class, $rules_id);
+                        }
+                        $output['found_inventories'] = [0, $back_class, $rules_id];
                         return $output;
                     }
                 }
@@ -1024,6 +1065,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'No creation on partial import',
+            'uuid'      => 'glpi_rule_import_asset_no_creation_on_partial_import',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1041,7 +1083,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device update (by mac+ifnumber restricted port)',
+            'name'      => 'Global update (by mac+ifnumber restricted port)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_mac_ifnumber_restricted_port',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1080,7 +1123,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device update (by mac+ifnumber not restricted port)',
+            'name'      => 'Global update (by mac+ifnumber not restricted port)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_mac_ifnumber_no_restricted_port',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1114,7 +1158,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device import (by mac+ifnumber)',
+            'name'      => 'Global import (by mac+ifnumber)',
+            'uuid'      => 'glpi_rule_import_asset_global_import_mac_ifnumber',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1138,7 +1183,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device update (by ip+ifdescr restricted port)',
+            'name'      => 'Global update (by ip+ifdescr restricted port)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_mac_ifdescr_restricted_port',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1177,7 +1223,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device update (by ip+ifdescr not restricted port)',
+            'name'      => 'Global update (by ip+ifdescr not restricted port)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_ip_ifdescr_no_restricted_port',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1211,7 +1258,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Device import (by ip+ifdescr)',
+            'name'      => 'Global import (by ip+ifdescr)',
+            'uuid'      => 'glpi_rule_import_asset_global_import_ip_ifdescr',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1236,6 +1284,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Update only mac address (mac on switch port)',
+            'uuid'      => 'glpi_rule_import_asset_update_only_mac_adress',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1265,6 +1314,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Import only mac address (mac on switch port)',
+            'uuid'      => 'glpi_rule_import_asset_import_only_mac_adress',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1289,6 +1339,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer constraint (name)',
+            'uuid'      => 'glpi_rule_import_asset_computer_constraint_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1308,6 +1359,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer update (by serial + uuid)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_serial_uuid',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1341,7 +1393,38 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
+            'name'      => 'Computer update (by serial + uuid is empty in GLPI)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_serial_uuid_empty',
+            'match'     => 'AND',
+            'is_active' => 1,
+            'criteria'  => [
+                [
+                    'criteria'  => 'itemtype',
+                    'condition' => Rule::PATTERN_IS,
+                    'pattern'   => 'Computer'
+                ],
+                [
+                    'criteria'  => 'serial',
+                    'condition' => Rule::PATTERN_FIND,
+                    'pattern'   => 1
+                ],
+                [
+                    'criteria'  => 'serial',
+                    'condition' => Rule::PATTERN_EXISTS,
+                    'pattern'   => 1
+                ],
+                [
+                    'criteria'  => 'uuid',
+                    'condition' => Rule::PATTERN_IS_EMPTY,
+                    'pattern'   => 1
+                ]
+            ],
+            'action'    => '_link'
+        ];
+
+        $rules[] = [
             'name'      => 'Computer import (by serial + uuid)',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_serial_uuid',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1366,6 +1449,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1390,6 +1474,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer update (by uuid)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_uuid',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1414,6 +1499,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer update (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1438,6 +1524,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer update (by name)',
+            'uuid'      => 'glpi_rule_import_asset_computer_update_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1462,6 +1549,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1481,6 +1569,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer import (by uuid)',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_uuid',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1500,6 +1589,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer import (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1519,6 +1609,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer import (by name)',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1538,6 +1629,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Computer import denied',
+            'uuid'      => 'glpi_rule_import_asset_computer_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1552,6 +1644,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer constraint (name)',
+            'uuid'      => 'glpi_rule_import_asset_printer_constraint_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1571,6 +1664,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_printer_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1595,6 +1689,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer update (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_printer_update_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1619,6 +1714,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_printer_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1638,6 +1734,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer import (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_printer_import_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1657,6 +1754,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Printer import denied',
+            'uuid'      => 'glpi_rule_import_asset_printer_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1671,6 +1769,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment constraint (name)',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_constraint_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1690,6 +1789,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1714,6 +1814,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment update (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_update_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1738,6 +1839,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1757,6 +1859,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment import (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_import_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1776,6 +1879,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'NetworkEquipment import denied',
+            'uuid'      => 'glpi_rule_import_asset_networkequipment_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1789,7 +1893,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Peripheral update (by serial)',
+            'name'      => 'Device update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_device_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1813,7 +1918,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Peripheral import (by serial)',
+            'name'      => 'Device import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_device_importe_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1832,7 +1938,8 @@ class RuleImportAsset extends Rule
         ];
 
         $rules[] = [
-            'name'      => 'Peripheral import denied',
+            'name'      => 'Device import denied',
+            'uuid'      => 'glpi_rule_import_asset_device_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1847,6 +1954,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Monitor update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_monitor_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1871,6 +1979,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Monitor import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_monitor_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1890,6 +1999,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Monitor import denied',
+            'uuid'      => 'glpi_rule_import_asset_monitor_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -1904,6 +2014,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Phone constraint (name)',
+            'uuid'      => 'glpi_rule_import_asset_phone_constraint_name',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1923,6 +2034,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Phone update (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_phone_update_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1947,6 +2059,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Phone import (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_phone_import_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1966,6 +2079,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Phone import denied',
+            'uuid'      => 'glpi_rule_import_asset_phone_import_denied',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -1980,6 +2094,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Cluster update (by uuid)',
+            'uuid'      => 'glpi_rule_import_asset_cluster_update_uuid',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2004,6 +2119,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Cluster import (by uuid)',
+            'uuid'      => 'glpi_rule_import_asset_cluster_import_uuid',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2023,6 +2139,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Cluster import denied',
+            'uuid'      => 'glpi_rule_import_asset_cluster_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2037,6 +2154,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Enclosure update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_enclosure_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2061,6 +2179,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Enclosure import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_enclosure_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2080,6 +2199,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Enclosure import denied',
+            'uuid'      => 'glpi_rule_import_asset_enclosure_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2094,6 +2214,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global constraint (name)',
+            'uuid'      => 'glpi_rule_import_asset_global_constraint_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2108,6 +2229,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global update (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2127,6 +2249,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global update (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_global_update_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -2146,6 +2269,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global import (by serial)',
+            'uuid'      => 'glpi_rule_import_asset_global_import_serial',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2160,6 +2284,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global import (by mac)',
+            'uuid'      => 'glpi_rule_import_asset_global_import_mac',
             'match'     => 'AND',
             'is_active' => 0,
             'criteria'  => [
@@ -2174,6 +2299,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Global import denied',
+            'uuid'      => 'glpi_rule_import_asset_global_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2188,6 +2314,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Database update (by name)',
+            'uuid'      => 'glpi_rule_import_asset_database_update_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2217,6 +2344,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Database import (by name)',
+            'uuid'      => 'glpi_rule_import_asset_database_import_name',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2236,6 +2364,7 @@ class RuleImportAsset extends Rule
 
         $rules[] = [
             'name'      => 'Database import denied',
+            'uuid'      => 'glpi_rule_import_asset_database_import_denied',
             'match'     => 'AND',
             'is_active' => 1,
             'criteria'  => [
@@ -2248,30 +2377,13 @@ class RuleImportAsset extends Rule
             'action'    => '_deny'
         ];
 
-        //load default rules from plugins
-        if ($with_plugins && isset($PLUGIN_HOOKS['add_rules'])) {
-            $ria = new self();
-            foreach ($PLUGIN_HOOKS['add_rules'] as $plugin => $val) {
-                if (!Plugin::isPluginLoaded($plugin)) {
-                    continue;
-                }
-                $rules = array_merge(
-                    $rules,
-                    Plugin::doOneHook(
-                        $plugin,
-                        "ruleImportAsset_addGlobalCriteria",
-                        $ria->getGlobalCriteria()
-                    )
-                );
-            }
-        }
-
         $ranking = 0;
         foreach ($rules as $rule) {
             $rulecollection = new RuleImportAssetCollection();
             $input = [
                 'is_active' => $rule['is_active'],
                 'name'      => $rule['name'],
+                'uuid'      => $rule['uuid'],
                 'match'     => $rule['match'],
                 'sub_type'  => self::getType(),
                 'ranking'   => $ranking

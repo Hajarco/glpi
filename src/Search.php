@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -44,25 +46,99 @@ use Glpi\Toolbox\Sanitizer;
  **/
 class Search
 {
-   // Default number of items displayed in global search
+    /**
+     * Default number of items displayed in global search
+     * @var int
+     * @see GLOBAL_SEARCH
+     */
     const GLOBAL_DISPLAY_COUNT = 10;
+
    // EXPORT TYPE
+    /**
+     * The global search view (Search across many item types).
+     * This is NOT the same as the AllAssets view which is just a special itemtype.
+     * @var int
+     */
     const GLOBAL_SEARCH        = -1;
+
+    /**
+     * The standard view.
+     * This includes the following sub-views:
+     * - Table/List
+     * - Map
+     * - Browse
+     * @var int
+     */
     const HTML_OUTPUT          = 0;
+
+    /**
+     * SYLK export format
+     * @var int
+     */
     const SYLK_OUTPUT          = 1;
+
+    /**
+     * PDF export format (Landscape mode)
+     * @var int
+     */
     const PDF_OUTPUT_LANDSCAPE = 2;
+
+    /**
+     * CSV export format
+     * @var int
+     */
     const CSV_OUTPUT           = 3;
+
+    /**
+     * PDF export format (Portrait mode)
+     * @var int
+     */
     const PDF_OUTPUT_PORTRAIT  = 4;
+
+    /**
+     * Names list export format
+     * @var int
+     */
     const NAMES_OUTPUT         = 5;
 
+    /**
+     * Placeholder for a <br> line break
+     * @var string
+     */
     const LBBR = '#LBBR#';
+
+    /**
+     * Placeholder for a <hr> line break
+     * @var string
+     */
     const LBHR = '#LBHR#';
 
+    /**
+     * Separator used to separate values of a same element in CONCAT MySQL function.
+     *
+     * @var string
+     * @see LONGSEP
+     */
     const SHORTSEP = '$#$';
+
+    /**
+     * Separator used to separate each element in GROUP_CONCAT MySQL function.
+     *
+     * @var string
+     * @see SHORTSEP
+     */
     const LONGSEP  = '$$##$$';
 
+    /**
+     * Placeholder for a null value
+     * @var string
+     */
     const NULLVALUE = '__NULL__';
 
+    /**
+     * The output format for the search results
+     * @var int
+     */
     public static $output_type = self::HTML_OUTPUT;
     public static $search = [];
 
@@ -85,9 +161,10 @@ class Search
 
         if (
             $itemtype == "Ticket"
+            && Session::getCurrentInterface() === 'central'
             && $default = Glpi\Dashboard\Grid::getDefaultDashboardForMenu('mini_ticket', true)
         ) {
-            $dashboard = new Glpi\Dashboard\Grid($default, 33, 1);
+            $dashboard = new Glpi\Dashboard\Grid($default, 33, 2);
             $dashboard->show(true);
         }
 
@@ -107,7 +184,7 @@ class Search
     /**
      * Display result table for search engine for an type
      *
-     * @param string $itemtype     Item type to manage
+     * @param class-string<CommonDBTM> $itemtype Item type to manage
      * @param array  $params       Search params passed to
      *                             prepareDatasForSearch function
      * @param array  $forcedisplay Array of columns to display (default empty
@@ -141,7 +218,7 @@ class Search
     /**
      * Display result table for search engine for an type as a map
      *
-     * @param string $itemtype Item type to manage
+     * @param class-string<CommonDBTM> $itemtype Item type to manage
      * @param array  $params   Search params passed to prepareDatasForSearch function
      *
      * @return void
@@ -323,7 +400,7 @@ class Search
                );
             }).fail(function (response) {
                var _data = response.responseJSON;
-               var _message = '" . __s('An error occured loading data :(') . "';
+               var _message = '" . __s('An error occurred loading data :(') . "';
                if (_data.message) {
                   _message = _data.message;
                }
@@ -357,7 +434,7 @@ class Search
      *
      * @since 0.85
      *
-     * @param string $itemtype      Item type to manage
+     * @param class-string<CommonDBTM> $itemtype Item type to manage
      * @param array  $params        Search params passed to prepareDatasForSearch function
      * @param array  $forcedisplay  Array of columns to display (default empty = empty use display pref and search criteria)
      *
@@ -379,7 +456,7 @@ class Search
      *
      * @since 0.85
      *
-     * @param string $itemtype      Item type
+     * @param class-string<CommonDBTM> $itemtype Item type
      * @param array  $params        Array of parameters
      *                               may include sort, order, start, list_limit, deleted, criteria, metacriteria
      * @param array  $forcedisplay  Array of columns to display (default empty = empty use display pref and search criterias)
@@ -478,7 +555,7 @@ class Search
                 }
             }
         }
-        if (!$CFG_GLPI['allow_search_view']) {
+        if (!$CFG_GLPI['allow_search_view'] && !array_key_exists('globalsearch', $p)) {
             foreach ($p['criteria'] as $val) {
                 if (isset($val['field']) && $val['field'] == 'view') {
                     Html::displayRightError();
@@ -561,8 +638,8 @@ class Search
         $to_add_view = array_diff($p['sort'], $data['toview']);
         array_push($data['toview'], ...$to_add_view);
 
-       // Special case for Ticket : put ID in front
-        if ($itemtype == 'Ticket') {
+       // Special case for CommonITILObjects : put ID in front
+        if (is_a($itemtype, CommonITILObject::class, true)) {
             array_unshift($data['toview'], 2);
         }
 
@@ -603,7 +680,7 @@ class Search
      *
      * @param array $data  Array of search datas prepared to generate SQL
      *
-     * @return void
+     * @return void|false May return false if the search request data is invalid
      **/
     public static function constructSQL(array &$data)
     {
@@ -615,8 +692,9 @@ class Search
 
         $data['sql']['count']  = [];
         $data['sql']['search'] = '';
+        $data['sql']['raw']    = [];
 
-        $searchopt        = &self::getOptions($data['itemtype']);
+        $searchopt        = self::getOptions($data['itemtype']);
 
         $blacklist_tables = [];
         $orig_table = self::getOrigTableName($data['itemtype']);
@@ -1029,7 +1107,7 @@ class Search
                         $tmpquery = str_replace("`glpi_softwares`.`serial`", "''", $tmpquery);
                         $tmpquery = str_replace("`glpi_softwares`.`otherserial`", "''", $tmpquery);
                     }
-                     $QUERY .= $tmpquery;
+                    $QUERY .= $tmpquery;
                 }
             }
             if (empty($QUERY)) {
@@ -1039,6 +1117,15 @@ class Search
             $QUERY .= str_replace($CFG_GLPI["union_search_type"][$data['itemtype']] . ".", "", $ORDER) .
                    $LIMIT;
         } else {
+            $data['sql']['raw'] = [
+                'SELECT' => $SELECT,
+                'FROM' => $FROM,
+                'WHERE' => $WHERE,
+                'GROUPBY' => $GROUPBY,
+                'HAVING' => $HAVING,
+                'ORDER' => $ORDER,
+                'LIMIT' => $LIMIT
+            ];
             $QUERY = $SELECT .
                   $FROM .
                   $WHERE .
@@ -1090,7 +1177,7 @@ class Search
             ) {
                 $itemtype = $criterion['itemtype'];
                 $meta = true;
-                $meta_searchopt = &self::getOptions($itemtype);
+                $meta_searchopt = self::getOptions($itemtype);
             } else {
                // Not a meta, use the same search option everywhere
                 $meta_searchopt = $searchopt;
@@ -1301,7 +1388,7 @@ class Search
             }
 
             $m_itemtype = $criterion['itemtype'];
-            $metaopt = &self::getOptions($m_itemtype);
+            $metaopt = self::getOptions($m_itemtype);
             $sopt    = $metaopt[$criterion['field']];
 
            //add toview for meta criterion
@@ -1348,7 +1435,7 @@ class Search
      * @param array   $data      array of search data prepared to get data
      * @param boolean $onlycount If we just want to count results
      *
-     * @return void
+     * @return void|false May return false if the SQL data in $data is not valid
      **/
     public static function constructData(array &$data, $onlycount = false)
     {
@@ -1431,7 +1518,7 @@ class Search
            // Get columns
             $data['data']['cols'] = [];
 
-            $searchopt = &self::getOptions($data['itemtype']);
+            $searchopt = self::getOptions($data['itemtype']);
 
             foreach ($data['toview'] as $opt_id) {
                 $data['data']['cols'][] = [
@@ -1445,14 +1532,15 @@ class Search
 
            // manage toview column for criteria with meta flag
             foreach ($data['meta_toview'] as $m_itemtype => $toview) {
-                $searchopt = &self::getOptions($m_itemtype);
+                $m_searchopt = self::getOptions($m_itemtype);
                 foreach ($toview as $opt_id) {
                     $data['data']['cols'][] = [
                         'itemtype'  => $m_itemtype,
                         'id'        => $opt_id,
-                        'name'      => $searchopt[$opt_id]["name"],
+                        'name'      => $m_searchopt[$opt_id]["name"],
                         'meta'      => 1,
-                        'searchopt' => $searchopt[$opt_id],
+                        'searchopt' => $m_searchopt[$opt_id],
+                        'groupname' => $m_itemtype,
                     ];
                 }
             }
@@ -1467,14 +1555,15 @@ class Search
                         && isset($metacriteria['value']) && (strlen($metacriteria['value']) > 0)
                     ) {
                         if (!isset($already_printed[$metacriteria['itemtype'] . $metacriteria['field']])) {
-                            $searchopt = &self::getOptions($metacriteria['itemtype']);
+                            $m_searchopt = self::getOptions($metacriteria['itemtype']);
 
                             $data['data']['cols'][] = [
                                 'itemtype'  => $metacriteria['itemtype'],
                                 'id'        => $metacriteria['field'],
-                                'name'      => $searchopt[$metacriteria['field']]["name"],
+                                'name'      => $m_searchopt[$metacriteria['field']]["name"],
                                 'meta'      => 1,
-                                'searchopt' => $searchopt[$metacriteria['field']]
+                                'searchopt' => $m_searchopt[$metacriteria['field']],
+                                'groupname' => $metacriteria['itemtype'],
                             ];
 
                             $already_printed[$metacriteria['itemtype'] . $metacriteria['field']] = 1;
@@ -1504,6 +1593,7 @@ class Search
                     if (
                         key($searchopt) !== null
                         && key($searchopt) !== "common"
+                        && !isset($data['data']['cols'][$num]['groupname'])
                     ) {
                         $data['data']['cols'][$num]['groupname'] = current($searchopt);
                     }
@@ -1689,7 +1779,7 @@ class Search
         $prehref = $search['target'] . (strpos($search['target'], "?") !== false ? "&" : "?");
         $href    = $prehref . $parameters;
 
-        Session::initNavigateListItems($data['itemtype']);
+        Session::initNavigateListItems($data['itemtype'], '', $href);
 
         TemplateRenderer::getInstance()->display('components/search/display_data.html.twig', [
             'data'                => $data,
@@ -1830,9 +1920,7 @@ class Search
             );
         }
        // End Line for column headers
-        if (!empty($headers_line)) {
-            $headers_line .= self::showEndLine($data['display_type']);
-        }
+        $headers_line .= self::showEndLine($data['display_type'], true);
 
         $headers_line_top    .= $headers_line;
         $headers_line_top    .= self::showEndHeader($data['display_type']);
@@ -1937,9 +2025,9 @@ class Search
 
             foreach ($data['search']['criteria'] as $criteria) {
                 if (isset($criteria['itemtype'])) {
-                    $searchopt = &self::getOptions($criteria['itemtype']);
+                    $searchopt = self::getOptions($criteria['itemtype']);
                 } else {
-                    $searchopt = &self::getOptions($data['itemtype']);
+                    $searchopt = self::getOptions($data['itemtype']);
                 }
                 $titlecontain = '';
 
@@ -2083,7 +2171,7 @@ class Search
         ) {
             $metanames = [];
             foreach ($data['search']['metacriteria'] as $metacriteria) {
-                $searchopt = &self::getOptions($metacriteria['itemtype']);
+                $searchopt = self::getOptions($metacriteria['itemtype']);
                 if (!isset($metanames[$metacriteria['itemtype']])) {
                     if ($metaitem = getItemForItemtype($metacriteria['itemtype'])) {
                         $metanames[$metacriteria['itemtype']] = $metaitem->getTypeName();
@@ -2232,7 +2320,7 @@ class Search
     /**
      * Get meta types available for search engine
      *
-     * @param string $itemtype Type to display the form
+     * @param class-string<CommonDBTM> $itemtype Type to display the form
      *
      * @return array Array of available itemtype
      **/
@@ -2253,7 +2341,7 @@ class Search
                 continue;
             }
             if ($key === 'ticket_types' && $item instanceof CommonITILObject) {
-               // Linked are filtered by CommonITILObject::getAllTypesForHelpdesk()
+                // Linked are filtered by CommonITILObject::getAllTypesForHelpdesk()
                 $linked = array_merge($linked, array_keys($item::getAllTypesForHelpdesk()));
                 continue;
             }
@@ -2262,11 +2350,16 @@ class Search
                 if ($itemtype === $config_itemtype::getType()) {
                    // List is related to source itemtype, all types of list are so linked
                     $linked = array_merge($linked, $values);
-                } else if (in_array($itemtype, $values)) {
+                } elseif (in_array($itemtype, $values)) {
                    // Source itemtype is inside list, type corresponding to list is so linked
                     $linked[] = $config_itemtype::getType();
                 }
             }
+        }
+
+        // Add entity meta if needed
+        if ($item->isField('entities_id') && !($item instanceof Entity)) {
+            $linked[] = Entity::getType();
         }
 
         return array_unique($linked);
@@ -2344,10 +2437,14 @@ class Search
     }
 
     /**
-     * @since 0.85
+     * Gets the class to use if the specified itemtype extends one of the known reference types.
      *
-     * @param $itemtype
-     **/
+     * @param class-string<CommonDBTM> $itemtype
+     *
+     * @return string|false The reference class name. If the provided itemtype is from a plugin, the provided itemtype is returned.
+     *                      If the itemtype is not from a plugin and not exactly or extended from a reference itemtype, false will be returned.
+     * @since 0.85
+     */
     public static function getMetaReferenceItemtype($itemtype)
     {
 
@@ -2378,6 +2475,8 @@ class Search
 
 
     /**
+     * Get dropdown options of logical operators.
+     * @return string[]|array<string, string>
      * @since 0.85
      **/
     public static function getLogicalOperators($only_not = false)
@@ -2403,7 +2502,7 @@ class Search
      *
      * Params need to parsed before using Search::manageParams function
      *
-     * @param string $itemtype  Type to display the form
+     * @param class-string<CommonDBTM> $itemtype  Type to display the form
      * @param array  $params    Array of parameters may include sort, is_deleted, criteria, metacriteria
      *
      * @return void
@@ -2430,6 +2529,7 @@ class Search
         $p['mainform']     = true;
         $p['prefix_crit']  = '';
         $p['addhidden']    = [];
+        $p['showaction']   = true;
         $p['actionname']   = 'search';
         $p['actionvalue']  = _sx('button', 'Search');
 
@@ -2442,7 +2542,7 @@ class Search
         $rand_criteria = mt_rand();
         $main_block_class = '';
         $card_class = 'search-form card card-sm mb-4';
-        if ($p['mainform']) {
+        if ($p['mainform'] && $p['showaction']) {
             echo "<form name='searchform$normalized_itemtype' class='search-form-container' method='get' action='" . $p['target'] . "'>";
         } else {
             $main_block_class = "sub_criteria";
@@ -2473,7 +2573,7 @@ class Search
 
         echo "<a id='more-criteria$rand_criteria' role='button'
             class='normalcriteria fold-search list-group-item p-2 border-0'
-            style='display: none;'>...</a>";
+            style='display: none;'></a>";
 
         echo "</div>"; // .list
 
@@ -2504,11 +2604,13 @@ class Search
         $json_p = json_encode($p);
 
         if ($p['mainform']) {
-           // Display submit button
-            echo "<button class='btn btn-sm btn-primary me-1' type='submit' name='" . $p['actionname'] . "'>
-               <i class='ti ti-list-search'></i>
-               <span class='d-none d-sm-block'>" . $p['actionvalue'] . "</span>
-            </button>";
+            if ($p['showaction']) {
+                // Display submit button
+                echo "<button class='btn btn-sm btn-primary me-1' type='submit' name='" . $p['actionname'] . "'>
+                <i class='ti ti-list-search'></i>
+                <span class='d-none d-sm-block'>" . $p['actionvalue'] . "</span>
+                </button>";
+            }
             if ($p['showbookmark'] || $p['showreset']) {
                 if ($p['showbookmark']) {
                     SavedSearch::showSaveButton(
@@ -2628,7 +2730,7 @@ JAVASCRIPT;
 
         echo "</div>"; // #searchcriteria
         echo "</div>"; // .card
-        if ($p['mainform']) {
+        if ($p['mainform'] && $p['showaction']) {
             Html::closeForm();
         }
     }
@@ -2952,6 +3054,8 @@ JAVASCRIPT;
         }
         echo "</div>";
         echo "</div>";
+        echo "</div>";
+        echo "</div>";
     }
 
     /**
@@ -3022,7 +3126,7 @@ JAVASCRIPT;
      * @param  integer $num         index of the criteria
      * @param  array   $parents_num node indexes of the parents (@see displayCriteriaGroup)
      *
-     * @return mixed   the found criteria array of false of nothing found
+     * @return array|false   the found criteria array, or false if nothing found
      */
     public static function findCriteriaInSession($itemtype = '', $num = 0, $parents_num = [])
     {
@@ -3055,7 +3159,7 @@ JAVASCRIPT;
      *
      * @since 9.4
      *
-     * @param  string $itemtype
+     * @param  class-string<CommonDBTM> $itemtype
      *
      * @return array  criteria
      */
@@ -3328,7 +3432,7 @@ JAVASCRIPT;
 
 
     /**
-     * Generic Function to add GROUP BY to a request
+     * Generic Function to add to a HAVING clause
      *
      * @since 9.4: $num param has been dropped
      *
@@ -3339,14 +3443,15 @@ JAVASCRIPT;
      * @param string  $searchtype     search type ('contains' or 'equals')
      * @param string  $val            value search
      *
-     * @return select string
+     * @return string|false HAVING clause sub-string (Does not include the "HAVING" keyword).
+     *                      May return false if the related search option is not valid for SQL searching.
      **/
     public static function addHaving($LINK, $NOT, $itemtype, $ID, $searchtype, $val)
     {
 
         global $DB;
 
-        $searchopt  = &self::getOptions($itemtype);
+        $searchopt  = self::getOptions($itemtype);
         if (!isset($searchopt[$ID]['table'])) {
             return false;
         }
@@ -3438,9 +3543,7 @@ JAVASCRIPT;
                 case "number":
                 case "decimal":
                 case "timestamp":
-                    $search  = ["/\&lt;/","/\&gt;/"];
-                    $replace = ["<",">"];
-                    $val     = preg_replace($search, $replace, $val);
+                    $val = Sanitizer::decodeHtmlSpecialChars($val); // Decode "<" and ">" operators
                     if (preg_match("/([<>])([=]*)[[:space:]]*([0-9]+)/", $val, $regs)) {
                         if ($NOT) {
                             if ($regs[1] == '<') {
@@ -3486,7 +3589,7 @@ JAVASCRIPT;
      *    Old functionality maintained by checking the type of the first parameter.
      *    This backwards compatibility will be removed in a later version.
      *
-     * @param string $itemtype The itemtype
+     * @param class-string<CommonDBTM> $itemtype The itemtype
      * @param array  $sort_fields The search options to order on. This array should contain one or more associative arrays containing:
      *    - id: The search option ID
      *    - order: The sort direction (Default: ASC). Invalid sort directions will be replaced with the default option
@@ -3512,10 +3615,13 @@ JAVASCRIPT;
         }
 
         $orderby_criteria = [];
-        $searchopt = &self::getOptions($itemtype);
+        $searchopt = self::getOptions($itemtype);
 
         foreach ($sort_fields as $sort_field) {
             $ID = $sort_field['searchopt_id'];
+            if (isset($searchopt[$ID]['nosort']) && $searchopt[$ID]['nosort']) {
+                continue;
+            }
             $order = $sort_field['order'] ?? 'ASC';
            // Order security check
             if ($order != 'ASC') {
@@ -3601,7 +3707,7 @@ JAVASCRIPT;
                    //FIXME glpi_networkequipments.ip seems like a dead case
                     case "glpi_networkequipments.ip":
                     case "glpi_ipaddresses.name":
-                        $criterion = "INET_ATON(`$table$addtable`.`$field`) $order";
+                        $criterion = "INET6_ATON(`$table$addtable`.`$field`) $order";
                         break;
                 }
             }
@@ -3651,6 +3757,9 @@ JAVASCRIPT;
             $orderby_criteria[] = $criterion ?? "`ITEM_{$itemtype}_{$ID}` $order";
         }
 
+        if (count($orderby_criteria) === 0) {
+            return '';
+        }
         return ' ORDER BY ' . implode(', ', $orderby_criteria) . ' ';
     }
 
@@ -3658,10 +3767,10 @@ JAVASCRIPT;
     /**
      * Generic Function to add default columns to view
      *
-     * @param string $itemtype device type
+     * @param class-string<CommonDBTM> $itemtype  Item type
      * @param array  $params   array of parameters
      *
-     * @return select string
+     * @return array Array of search option IDs to be shown in the results
      **/
     public static function addDefaultToView($itemtype, $params)
     {
@@ -3700,7 +3809,7 @@ JAVASCRIPT;
     /**
      * Generic Function to add default select to a request
      *
-     * @param string $itemtype device type
+     * @param class-string<CommonDBTM> $itemtype device type
      *
      * @return string Select string
      **/
@@ -3761,7 +3870,7 @@ JAVASCRIPT;
     {
         global $DB, $CFG_GLPI;
 
-        $searchopt   = &self::getOptions($itemtype);
+        $searchopt   = self::getOptions($itemtype);
         $table       = $searchopt[$ID]["table"];
         $field       = $searchopt[$ID]["field"];
         $addtable    = "";
@@ -3852,14 +3961,9 @@ JAVASCRIPT;
                     if ((isset($searchopt[$ID]["forcegroupby"]) && $searchopt[$ID]["forcegroupby"])) {
                         $addaltemail = "";
                         if (
-                            (($itemtype == 'Ticket') || ($itemtype == 'Problem'))
+                            in_array($itemtype, ['Ticket', 'Change', 'Problem'])
                             && isset($searchopt[$ID]['joinparams']['beforejoin']['table'])
-                            && (($searchopt[$ID]['joinparams']['beforejoin']['table']
-                            == 'glpi_tickets_users')
-                            || ($searchopt[$ID]['joinparams']['beforejoin']['table']
-                                == 'glpi_problems_users')
-                            || ($searchopt[$ID]['joinparams']['beforejoin']['table']
-                                == 'glpi_changes_users'))
+                            && in_array($searchopt[$ID]['joinparams']['beforejoin']['table'], ['glpi_tickets_users', 'glpi_changes_users', 'glpi_problems_users'])
                         ) { // For tickets_users
                              $ticket_user_table
                              = $searchopt[$ID]['joinparams']['beforejoin']['table'] .
@@ -4126,7 +4230,7 @@ JAVASCRIPT;
     /**
      * Generic Function to add default where to a request
      *
-     * @param string $itemtype device type
+     * @param class-string<CommonDBTM> $itemtype device type
      *
      * @return string Where string
      **/
@@ -4135,6 +4239,10 @@ JAVASCRIPT;
         $condition = '';
 
         switch ($itemtype) {
+            case 'Reservation':
+                $condition = getEntitiesRestrictRequest("", ReservationItem::getTable(), '', '', true);
+                break;
+
             case 'Reminder':
                 $condition = Reminder::addVisibilityRestrict();
                 break;
@@ -4194,7 +4302,7 @@ JAVASCRIPT;
                 $condition = '';
                 if (!Session::haveRight("ticket", Ticket::READALL)) {
                     $searchopt
-                    = &self::getOptions($itemtype);
+                    = self::getOptions($itemtype);
                     $requester_table
                     = '`glpi_tickets_users_' .
                      self::computeComplexJoinID($searchopt[4]['joinparams']['beforejoin']
@@ -4285,7 +4393,7 @@ JAVASCRIPT;
                // Same structure in addDefaultJoin
                 $condition = '';
                 if (!Session::haveRight("$right", $itemtype::READALL)) {
-                    $searchopt       = &self::getOptions($itemtype);
+                    $searchopt       = self::getOptions($itemtype);
                     if (Session::haveRight("$right", $itemtype::READMY)) {
                         $requester_table      = '`glpi_' . $table . '_users_' .
                                           self::computeComplexJoinID($searchopt[4]['joinparams']
@@ -4449,7 +4557,7 @@ JAVASCRIPT;
 
         global $DB;
 
-        $searchopt = &self::getOptions($itemtype);
+        $searchopt = self::getOptions($itemtype);
         if (!isset($searchopt[$ID]['table'])) {
             return false;
         }
@@ -4643,12 +4751,7 @@ JAVASCRIPT;
                     if (
                         isset($searchopt[$ID]["joinparams"]["beforejoin"]["table"])
                         && isset($searchopt[$ID]["joinparams"]["beforejoin"]["joinparams"])
-                        && (($searchopt[$ID]["joinparams"]["beforejoin"]["table"]
-                         == 'glpi_tickets_users')
-                        || ($searchopt[$ID]["joinparams"]["beforejoin"]["table"]
-                             == 'glpi_problems_users')
-                        || ($searchopt[$ID]["joinparams"]["beforejoin"]["table"]
-                             == 'glpi_changes_users'))
+                        && in_array($searchopt[$ID]['joinparams']['beforejoin']['table'], ['glpi_tickets_users', 'glpi_changes_users', 'glpi_problems_users'])
                     ) {
                         $bj        = $searchopt[$ID]["joinparams"]["beforejoin"];
                         $linktable = $bj['table'] . '_' . self::computeComplexJoinID($bj['joinparams']) . $addmeta;
@@ -4726,9 +4829,7 @@ JAVASCRIPT;
                            $SEARCH ) ";
 
             case "glpi_ipaddresses.name":
-                $search  = ["/\&lt;/","/\&gt;/"];
-                $replace = ["<",">"];
-                $val     = preg_replace($search, $replace, $val);
+                $val = Sanitizer::decodeHtmlSpecialChars($val); // Decode "<" and ">" operators
                 if (preg_match("/^\s*([<>])([=]*)[[:space:]]*([0-9\.]+)/", $val, $regs)) {
                     if ($nott) {
                         if ($regs[1] == '<') {
@@ -4975,9 +5076,7 @@ JAVASCRIPT;
                     if (in_array($searchtype, ['equals', 'notequals'])) {
                         return " $link ($date_computation " . $SEARCH . ') ';
                     }
-                    $search  = ["/\&lt;/","/\&gt;/"];
-                    $replace = ["<",">"];
-                    $val     = preg_replace($search, $replace, $val);
+                    $val = Sanitizer::decodeHtmlSpecialChars($val); // Decode "<" and ">" operators
                     if (preg_match("/^\s*([<>=]+)(.*)/", $val, $regs)) {
                         if (is_numeric($regs[2])) {
                             return $link . " $date_computation " . $regs[1] . "
@@ -5033,9 +5132,7 @@ JAVASCRIPT;
                 case "timestamp":
                 case "progressbar":
                     $decimal_contains = $searchopt[$ID]["datatype"] === 'decimal' && $searchtype === 'contains';
-                    $search  = ["/\&lt;/", "/\&gt;/"];
-                    $replace = ["<", ">"];
-                    $val     = preg_replace($search, $replace, $val);
+                    $val = Sanitizer::decodeHtmlSpecialChars($val); // Decode "<" and ">" operators
 
                     if (preg_match("/([<>])([=]*)[[:space:]]*([0-9]+)/", $val, $regs)) {
                         if (in_array($searchtype, ["notequals", "notcontains"])) {
@@ -5124,7 +5221,7 @@ JAVASCRIPT;
     /**
      * Generic Function to add Default left join to a request
      *
-     * @param string $itemtype             Reference item type
+     * @param class-string<CommonDBTM> $itemtype Reference item type
      * @param string $ref_table            Reference table
      * @param array &$already_link_tables  Array of tables already joined
      *
@@ -5146,6 +5243,16 @@ JAVASCRIPT;
                     0,
                     0,
                     ['jointype' => 'child']
+                );
+                break;
+
+            case 'Reservation':
+                $out .= self::addLeftJoin(
+                    $itemtype,
+                    $ref_table,
+                    $already_link_tables,
+                    ReservationItem::getTable(),
+                    ReservationItem::getForeignKeyField(),
                 );
                 break;
 
@@ -5197,7 +5304,7 @@ JAVASCRIPT;
             case 'Ticket':
                // Same structure in addDefaultWhere
                 if (!Session::haveRight("ticket", Ticket::READALL)) {
-                    $searchopt = &self::getOptions($itemtype);
+                    $searchopt = self::getOptions($itemtype);
 
                    // show mine : requester
                     $out .= self::addLeftJoin(
@@ -5331,7 +5438,7 @@ JAVASCRIPT;
                // Same structure in addDefaultWhere
                 $out = '';
                 if (!Session::haveRight("$right", $itemtype::READALL)) {
-                    $searchopt = &self::getOptions($itemtype);
+                    $searchopt = self::getOptions($itemtype);
 
                     if (Session::haveRight("$right", $itemtype::READMY)) {
                        // show mine : requester
@@ -5588,6 +5695,9 @@ JAVASCRIPT;
                     if (!isset($tab['joinparams']['nolink']) || !$tab['joinparams']['nolink']) {
                         $cleanrt     = $intertable;
                         $complexjoin = self::computeComplexJoinID($interjoinparams);
+                        if (!empty($interlinkfield) && ($interlinkfield != getForeignKeyFieldForTable($intertable))) {
+                            $intertable .= "_" . $interlinkfield;
+                        }
                         if (!empty($complexjoin)) {
                             $intertable .= "_" . $complexjoin;
                         }
@@ -6031,7 +6141,7 @@ JAVASCRIPT;
     public static function displayConfigItem($itemtype, $ID, $data = [])
     {
 
-        $searchopt  = &self::getOptions($itemtype);
+        $searchopt  = self::getOptions($itemtype);
 
         $table      = $searchopt[$ID]["table"];
         $field      = $searchopt[$ID]["field"];
@@ -6087,20 +6197,46 @@ JAVASCRIPT;
                 $value        = $data[$NAME][0]['name'];
                 $status       = $data[$NAME][0]['status'];
                 $opening_date = $data[$NAME][0]['date'];
-                $tia_time     = $data[$NAME][0]['takeintoaccount_delay_stat'];
+                $tia_delay    = $data[$NAME][0]['takeintoaccount_delay_stat'];
+                $tia_date     = $data[$NAME][0]['takeintoaccountdate'];
+                // Fallback to old and incorrect computation for tickets saved before introducing takeintoaccountdate field
+                if ($tia_delay > 0 && $tia_date == null) {
+                    $tia_date = strtotime($opening_date) + $tia_delay;
+                }
 
                 $is_late = !empty($value)
                     && $status != CommonITILObject::WAITING
                     && (
-                        $tia_time > strtotime($opening_date) - strtotime($value)
-                        || ($tia_time == 0 && $value < $_SESSION['glpi_currenttime'])
+                        $tia_date > $value
+                        || ($tia_date == null && $value < $_SESSION['glpi_currenttime'])
                     );
 
                 if ($is_late) {
                     $out = " class=\"shadow-none\" style=\"background-color: #cf9b9b\" ";
                 }
                 break;
-
+            case "glpi_certificates.date_expiration":
+                if (
+                    !in_array($ID, [151, 158, 181, 186])
+                    && !empty($data[$NAME][0]['name'])
+                ) {
+                    $out = "";
+                    if ($before = Entity::getUsedConfig('send_certificates_alert_before_delay', $_SESSION['glpiactive_entity'])) {
+                        $before = date('Y-m-d', strtotime($_SESSION['glpi_currenttime'] . " + $before days"));
+                        if ($data[$NAME][0]['name'] < $_SESSION['glpi_currenttime']) {
+                            $out = " class=\"shadow-none\" style=\"color: white; background-color: #d63939\" ";
+                        } elseif ($data[$NAME][0]['name'] < $before) {
+                            $out = " class=\"shadow-none\"  style=\"background-color: #de5d06\" ";
+                        } elseif ($data[$NAME][0]['name'] >= $before) {
+                            $out = " class=\"shadow-none\"  style=\"background-color: #a1cf66\" ";
+                        }
+                    } else {
+                        if ($data[$NAME][0]['name'] < $_SESSION['glpi_currenttime']) {
+                            $out = " class=\"shadow-none\" style=\"background-color: #cf9b9b\" ";
+                        }
+                    }
+                }
+                break;
             case "glpi_projectstates.color":
             case "glpi_cables.color":
                 $bg_color = $data[$NAME][0]['name'];
@@ -6119,7 +6255,6 @@ JAVASCRIPT;
                 break;
 
             case "glpi_domains.date_expiration":
-            case "glpi_certificates.date_expiration":
                 if (
                     !empty($data[$NAME][0]['name'])
                     && ($data[$NAME][0]['name'] < $_SESSION['glpi_currenttime'])
@@ -6157,7 +6292,7 @@ JAVASCRIPT;
     ) {
         global $CFG_GLPI;
 
-        $searchopt = &self::getOptions($itemtype);
+        $searchopt = self::getOptions($itemtype);
         if (
             isset($CFG_GLPI["union_search_type"][$itemtype])
             && ($CFG_GLPI["union_search_type"][$itemtype] == $searchopt[$ID]["table"])
@@ -6172,7 +6307,7 @@ JAVASCRIPT;
 
            // Search option may not exists in subtype
            // This is the case for "Inventory number" for a Software listed from ReservationItem search
-            $subtype_so = &self::getOptions($data["TYPE"]);
+            $subtype_so = self::getOptions($data["TYPE"]);
             if (!array_key_exists($ID, $subtype_so)) {
                 return '';
             }
@@ -6200,6 +6335,14 @@ JAVASCRIPT;
                 return $out;
             }
         }
+
+        $html_output = in_array(
+            self::$output_type,
+            [
+                self::HTML_OUTPUT,
+                self::GLOBAL_SEARCH, // For a global search, output will be done in HTML context
+            ]
+        );
 
         if (isset($so["table"])) {
             $table     = $so["table"];
@@ -6313,12 +6456,18 @@ JAVASCRIPT;
                         return sprintf(__('%1$s %2$s'), $usernameformat, $toadd);
                     }
 
-                    return TemplateRenderer::getInstance()->render('components/user/picture.html.twig', [
-                        'users_id'      => $data['id'],
-                        'display_login' => true,
-                        'force_login'   => true,
-                        'avatar_size'   => "avatar-sm",
-                    ]);
+                    if ($html_output) {
+                        $current_users_id = $data[$ID][0]['id'] ?? 0;
+                        if ($current_users_id > 0) {
+                            return TemplateRenderer::getInstance()->render('components/user/picture.html.twig', [
+                                'users_id'      => $current_users_id,
+                                'display_login' => true,
+                                'force_login'   => true,
+                                'avatar_size'   => "avatar-sm",
+                            ]);
+                        }
+                    }
+                    break;
 
                 case "glpi_profiles.name":
                     if (
@@ -6850,9 +6999,10 @@ JAVASCRIPT;
                             $out,
                             Html::showToolTip(
                                 RichText::getEnhancedHtml($data[$ID][0]['content']),
-                                ['applyto' => $itemtype .
-                                                                                $data[$ID][0]['id'],
-                                    'display' => false
+                                [
+                                    'applyto'        => $itemtype . $data[$ID][0]['id'],
+                                    'display'        => false,
+                                    'images_gallery' => false, // don't show photoswipe gallery in tooltips
                                 ]
                             )
                         );
@@ -6877,7 +7027,7 @@ JAVASCRIPT;
                     return "";
 
                 case 'glpi_ticketsatisfactions.satisfaction':
-                    if (self::$output_type == self::HTML_OUTPUT) {
+                    if ($html_output) {
                         return TicketSatisfaction::displaySatisfaction($data[$ID][0]['name']);
                     }
                     break;
@@ -6898,20 +7048,20 @@ JAVASCRIPT;
                     return Cartridge::getCount(
                         $data["id"],
                         $data[$ID][0]['alarm_threshold'],
-                        self::$output_type != self::HTML_OUTPUT
+                        !$html_output
                     );
 
                 case 'glpi_printers._virtual':
                     return Cartridge::getCountForPrinter(
                         $data["id"],
-                        self::$output_type != self::HTML_OUTPUT
+                        !$html_output
                     );
 
                 case 'glpi_consumableitems._virtual':
                     return Consumable::getCount(
                         $data["id"],
                         $data[$ID][0]['alarm_threshold'],
-                        self::$output_type != self::HTML_OUTPUT
+                        !$html_output
                     );
 
                 case 'glpi_links._virtual':
@@ -7053,10 +7203,9 @@ JAVASCRIPT;
                             }
                             $count_display++;
 
+                            $plaintext = RichText::getTextFromHtml($data[$ID][$k]['name'], false, true, $html_output);
 
-                            $plaintext = RichText::getTextFromHtml($data[$ID][$k]['name'], false, true, true);
-
-                            if (self::$output_type == self::HTML_OUTPUT && (Toolbox::strlen($plaintext) > $CFG_GLPI['cut'])) {
+                            if ($html_output && (Toolbox::strlen($plaintext) > $CFG_GLPI['cut'])) {
                                 $rand = mt_rand();
                                 $popup_params = [
                                     'display'       => false,
@@ -7224,7 +7373,7 @@ JAVASCRIPT;
                     if ($obj = getItemForItemtype($data[$ID][0]['name'])) {
                         return $obj->getTypeName();
                     }
-                    return "";
+                    return $data[$ID][0]['name'];
 
                 case "language":
                     if (isset($CFG_GLPI['languages'][$data[$ID][0]['name']])) {
@@ -7311,8 +7460,15 @@ HTML;
                        // Trans field exists
                         if (isset($data[$ID][$k]['trans']) && !empty($data[$ID][$k]['trans'])) {
                             $out .= $data[$ID][$k]['trans'];
+                        } elseif (isset($data[$ID][$k]['trans_completename']) && !empty($data[$ID][$k]['trans_completename'])) {
+                            $out .= CommonTreeDropdown::sanitizeSeparatorInCompletename($data[$ID][$k]['trans_completename']);
+                        } elseif (isset($data[$ID][$k]['trans_name']) && !empty($data[$ID][$k]['trans_name'])) {
+                            $out .= $data[$ID][$k]['trans_name'];
                         } else {
-                            $out .= $data[$ID][$k]['name'];
+                            $value = $data[$ID][$k]['name'];
+                            $out .= $so['field'] === 'completename'
+                                ? CommonTreeDropdown::sanitizeSeparatorInCompletename($value)
+                                : $value;
                         }
                     }
                 }
@@ -7511,7 +7667,7 @@ HTML;
     {
         global $CFG_GLPI;
 
-        $options = &self::getOptions($itemtype, $withplugins);
+        $options = self::getOptions($itemtype, $withplugins);
         $todel   = [];
 
         if (
@@ -7573,7 +7729,7 @@ HTML;
      *
      * Get an option number in the SEARCH_OPTION array
      *
-     * @param string $itemtype  Item type
+     * @param class-string<CommonDBTM> $itemtype  Item type
      * @param string $field     Name
      *
      * @return integer
@@ -7582,7 +7738,7 @@ HTML;
     {
 
         $table = $itemtype::getTable();
-        $opts  = &self::getOptions($itemtype);
+        $opts  = self::getOptions($itemtype);
 
         foreach ($opts as $num => $opt) {
             if (
@@ -7901,7 +8057,7 @@ HTML;
     public static function getActionsFor($itemtype, $field_num)
     {
 
-        $searchopt = &self::getOptions($itemtype);
+        $searchopt = self::getOptions($itemtype);
         $actions   = [
             'contains'    => __('contains'),
             'notcontains' => __('not contains'),
@@ -8090,7 +8246,7 @@ HTML;
                 global $PDF_TABLE;
                 $PDF_TABLE .= "<th $options>";
                 $PDF_TABLE .= htmlspecialchars($value);
-                $PDF_TABLE .= "</th>\n";
+                $PDF_TABLE .= "</th>";
                 break;
 
             case self::SYLK_OUTPUT: //sylk
@@ -8142,6 +8298,11 @@ HTML;
     {
 
         $out = "";
+        // Handle null values
+        if ($value === null) {
+            $value = '';
+        }
+
         switch ($type) {
             case self::PDF_OUTPUT_LANDSCAPE: //pdf
             case self::PDF_OUTPUT_PORTRAIT:
@@ -8152,7 +8313,7 @@ HTML;
                 $value = preg_replace('/' . self::LBHR . '/', '<hr>', $value);
                 $PDF_TABLE .= "<td $extraparam valign='top'>";
                 $PDF_TABLE .= $value;
-                $PDF_TABLE .= "</td>\n";
+                $PDF_TABLE .= "</td>";
 
                 break;
 
@@ -8300,21 +8461,16 @@ HTML;
 
                 $pdf = new GLPIPDF(
                     [
-                        'default_font_size'  => $fontsize,
-                        'default_font'       => $font,
+                        'font_size'  => $fontsize,
+                        'font'       => $font,
                         'orientation'        => $type == self::PDF_OUTPUT_LANDSCAPE ? 'L' : 'P',
-                    ]
+                    ],
+                    $count,
+                    $title,
                 );
-                if ($count !== null) {
-                     $pdf->setTotalCount($count);
-                }
-                $pdf->SetTitle($title);
 
-                $pdf->SetFont($font, '', $fontsize);
-
-                $pdf->AddPage();
                 $PDF_TABLE .= '</table>';
-                $pdf->writeHTML($PDF_TABLE);
+                $pdf->writeHTML($PDF_TABLE, true, false, true);
                 $pdf->Output('glpi.pdf', 'I');
                 break;
 
@@ -8516,7 +8672,7 @@ HTML;
                 if ($odd) {
                     $style = " style=\"background-color:#DDDDDD;\" ";
                 }
-                $PDF_TABLE .= "<tr $style>";
+                $PDF_TABLE .= "<tr $style nobr=\"true\">";
                 break;
 
             case self::SYLK_OUTPUT: //sylk
@@ -8542,7 +8698,7 @@ HTML;
      *
      * @return string HTML to display
      **/
-    public static function showEndLine($type)
+    public static function showEndLine($type, bool $is_header_line = false)
     {
 
         $out = "";
@@ -8558,7 +8714,11 @@ HTML;
 
             case self::CSV_OUTPUT: //csv
             case self::NAMES_OUTPUT:
-                $out = "\n";
+                // NAMES_OUTPUT has no output on header lines
+                $newline = $type != self::NAMES_OUTPUT || !$is_header_line;
+                if ($newline) {
+                    $out = "\n";
+                }
                 break;
 
             default:
@@ -8698,8 +8858,10 @@ HTML;
      **/
     public static function makeTextSearchValue($val)
     {
-       // Unclean to permit < and > search
-        $val = Sanitizer::unsanitize($val);
+        // `$val` will mostly comes from sanitized input, but may also be raw value.
+        // 1. Unsanitize value to be sure to use raw value.
+        // 2. Escape raw value to protect SQL special chars.
+        $val = Sanitizer::dbEscape(Sanitizer::unsanitize($val));
 
        // escape _ char used as wildcard in mysql likes
         $val = str_replace('_', '\\_', $val);
@@ -8797,7 +8959,7 @@ HTML;
      *
      * @param string $alias    Alias for translation table
      * @param string $table    Table to join on
-     * @param string $itemtype Item type
+     * @param class-string<CommonDBTM> $itemtype Item type
      * @param string $field    Field name
      *
      * @return string
@@ -8815,7 +8977,7 @@ HTML;
     /**
      * Get table name for item type
      *
-     * @param string $itemtype
+     * @param class-string<CommonDBTM> $itemtype
      *
      * @return string
      */

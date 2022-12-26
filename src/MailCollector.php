@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -122,9 +124,15 @@ class MailCollector extends CommonDBTM
     {
 
         if (static::canView()) {
-            $options['options']['notimportedemail']['links']['search']
-                                          = '/front/notimportedemail.php';
-            return $options;
+            return [
+                'options' => [
+                    'notimportedemail' => [
+                        'links' => [
+                            'search' => '/front/notimportedemail.php',
+                        ],
+                    ],
+                ],
+            ];
         }
         return false;
     }
@@ -385,7 +393,7 @@ class MailCollector extends CommonDBTM
             $this->connect();
         } catch (\Throwable $e) {
             ErrorHandler::getInstance()->handleException($e);
-            echo __('An error occured trying to connect to collector.');
+            echo __('An error occurred trying to connect to collector.');
             return;
         }
 
@@ -691,7 +699,7 @@ class MailCollector extends CommonDBTM
             } catch (\Throwable $e) {
                 ErrorHandler::getInstance()->handleException($e);
                 Session::addMessageAfterRedirect(
-                    __('An error occured trying to connect to collector.') . "<br/>" . $e->getMessage(),
+                    __('An error occurred trying to connect to collector.') . "<br/>" . $e->getMessage(),
                     false,
                     ERROR
                 );
@@ -767,7 +775,7 @@ class MailCollector extends CommonDBTM
 
                         if (!$tkt['_blacklisted']) {
                               global $DB;
-                              $rejinput['from']              = $requester;
+                              $rejinput['from']              = $requester ?? '';
                               $rejinput['to']                = $headers['to'];
                               $rejinput['users_id']          = $tkt['_users_id_requester'];
                               $rejinput['subject']           = Sanitizer::sanitize($this->cleanSubject($headers['subject']));
@@ -1474,12 +1482,16 @@ class MailCollector extends CommonDBTM
             $subject = '';
         }
 
+        $message_id = $message->getHeaders()->has('message-id')
+            ? $message->getHeader('message-id')->getFieldValue()
+            : 'MISSING_ID_' . sha1($message->getHeaders()->toString());
+
         $mail_details = [
             'from'       => Toolbox::strtolower($sender_email),
             'subject'    => $subject,
             'reply-to'   => $reply_to_addr !== null ? Toolbox::strtolower($reply_to_addr) : null,
             'to'         => $to !== null ? Toolbox::strtolower($to) : null,
-            'message_id' => $message->getHeader('message_id')->getFieldValue(),
+            'message_id' => $message_id,
             'tos'        => $tos,
             'ccs'        => $ccs,
             'date'       => $date
@@ -1668,8 +1680,10 @@ class MailCollector extends CommonDBTM
             $contents = $this->getDecodedContent($part);
             if (file_put_contents($path . $filename, $contents)) {
                 $this->files[$filename] = $filename;
-               // If embeded image, we add a tag
-                if (preg_match('@image/.+@', $content_type)) {
+
+                // If embeded image, we add a tag
+                $mime = Toolbox::getMime($path . $filename);
+                if (preg_match('@image/.+@', $mime)) {
                     end($this->files);
                     $tag = Rule::getUuid();
                     $this->tags[$filename]  = $tag;
@@ -1737,7 +1751,37 @@ class MailCollector extends CommonDBTM
             if ($content_type->getType() == 'text/html') {
                 $this->body_is_html = true;
                 $content = $this->getDecodedContent($part);
-               //do not check for text part if we found html one.
+
+                // Keep only HTML body content
+                $body_matches = [];
+                if (preg_match('/<body[^>]*>\s*(?<body>.+?)\s*<\/body>/is', $content, $body_matches) === 1) {
+                    $content = $body_matches['body'];
+                }
+
+                // Strip <style> and <script> tags located in HTML body.
+                // They could be neutralized by RichText::getSafeHtml(), but their content would be displayed,
+                // and end-user would probably prefer having them completely removed.
+                $content = preg_replace(
+                    [
+                        '/<style[^>]*>.*?<\/style>/s',
+                        '/<script[^>]*>.*?<\/script>/s',
+                    ],
+                    '',
+                    $content
+                );
+
+                // Strip IE/Outlook conditional code.
+                // Strip commented conditional code (`<!--[if lte mso 9]>...<![endif]-->`) contents that
+                // is not supposed to be visible outside Outlook/IE context.
+                $content = preg_replace('/<!--\[if\s+[^\]]+\]>.*?<!\[endif\]-->/s', '', $content);
+                // Preserve uncommented conditional code (`<![if !supportLists]>...<![endif]>`) contents that
+                // is supposed to be visible outside Outlook/IE context.
+                $content = preg_replace('/<!\[if\s+[^\]]+\]>(.*?)<!\[endif\]>/s', '$1', $content);
+
+                // Strip namespaced tags.
+                $content = preg_replace('/<\w+:\w+>.*?<\/\w+:\w+>/s', '', $content);
+
+                // do not check for text part if we found html one.
                 break;
             }
             if ($content_type->getType() == 'text/plain' && $content === null) {

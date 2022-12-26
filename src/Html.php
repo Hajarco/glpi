@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -37,6 +39,7 @@ use Glpi\Application\ErrorHandler;
 use Glpi\Application\View\TemplateRenderer;
 use Glpi\Console\Application;
 use Glpi\Plugin\Hooks;
+use Glpi\Toolbox\FrontEnd;
 use Glpi\Toolbox\Sanitizer;
 use ScssPhp\ScssPhp\Compiler;
 
@@ -219,19 +222,20 @@ class Html
     /**
      * Convert a date YY-MM-DD HH:MM to DD-MM-YY HH:MM for display in a html table
      *
-     * @param string       $time    Datetime to convert
-     * @param integer|null $format  Datetime format
+     * @param string       $time            Datetime to convert
+     * @param integer|null $format          Datetime format
+     * @param bool         $with_seconds    Indicates if seconds should be present in output
      *
      * @return null|string
      **/
-    public static function convDateTime($time, $format = null)
+    public static function convDateTime($time, $format = null, bool $with_seconds = false)
     {
 
         if (is_null($time) || ($time == 'NULL')) {
             return null;
         }
 
-        return self::convDate($time, $format) . ' ' . substr($time, 11, 5);
+        return self::convDate($time, $format) . ' ' . substr($time, 11, $with_seconds ? 8 : 5);
     }
 
 
@@ -568,7 +572,11 @@ class Html
         }
 
         if (!empty($params)) {
-            $dest .= '&' . $params;
+            if (str_contains('?', $dest)) {
+                $dest .= '&' . $params;
+            } else {
+                $dest .= '?' . $params;
+            }
         }
 
         self::redirect($dest);
@@ -580,7 +588,7 @@ class Html
      *
      * @return void
      **/
-    public static function displayNotFoundError()
+    public static function displayNotFoundError(string $additional_info = '')
     {
         global $CFG_GLPI, $HEADER_LOADED;
 
@@ -596,6 +604,15 @@ class Html
         echo "<div class='center'><br><br>";
         echo "<img src='" . $CFG_GLPI["root_doc"] . "/pics/warning.png' alt='" . __s('Warning') . "'>";
         echo "<br><br><span class='b'>" . __('Item not found') . "</span></div>";
+        $requested_url = $_SERVER['REQUEST_URI'] ?? 'Unknown';
+        $user_id = Session::getLoginUserID() ?? 'Anonymous';
+        $internal_message = "User ID: $user_id tried to access a non-existent item $requested_url. Additional information: $additional_info\n";
+        $internal_message .= "\tStack Trace:\n";
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        foreach ($backtrace as $frame) {
+            $internal_message .= "\t\t" . $frame['file'] . ':' . $frame['line'] . ' ' . $frame['function'] . '()' . "\n";
+        }
+        Toolbox::logInFile('access-errors', $internal_message);
         self::nullFooter();
         exit();
     }
@@ -606,8 +623,22 @@ class Html
      *
      * @return void
      **/
-    public static function displayRightError()
+    public static function displayRightError(string $additional_info = '')
     {
+        $requested_url = (isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : 'Unknown');
+        $user_id = Session::getLoginUserID() ?? 'Anonymous';
+        if (empty($additional_info)) {
+            $additional_info = __('No additional information given');
+        }
+        $internal_message = "User ID: $user_id tried to access or perform an action on $requested_url with insufficient rights. Additional information: $additional_info\n";
+        $internal_message .= "\tStack Trace:\n";
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        $trace_string = '';
+        foreach ($backtrace as $frame) {
+            $trace_string .= "\t\t" . $frame['file'] . ':' . $frame['line'] . ' ' . $frame['function'] . '()' . "\n";
+        }
+        $internal_message .= $trace_string;
+        Toolbox::logInFile('access-errors', $internal_message);
         self::displayErrorAndDie(__("You don't have permission to perform this action."));
     }
 
@@ -615,9 +646,11 @@ class Html
     /**
      * Display a div containing messages set in session in the previous page
      **/
-    public static function displayMessageAfterRedirect()
+    public static function displayMessageAfterRedirect(bool $display_container = true)
     {
-        TemplateRenderer::getInstance()->display('components/messages_after_redirect_toasts.html.twig');
+        TemplateRenderer::getInstance()->display('components/messages_after_redirect_toasts.html.twig', [
+            'display_container' => $display_container
+        ]);
     }
 
 
@@ -990,7 +1023,7 @@ class Html
      *                    - percent   current level
      *
      *
-     * @return void
+     * @return string|void Generated HTML if `display` param is true, void otherwise.
      **/
     public static function progressBar($id, array $options = [])
     {
@@ -1232,6 +1265,14 @@ HTML;
                 }
             }
 
+            // include more js libs for dashboard case
+            $jslibs = array_merge($jslibs, [
+                'gridstack',
+                'charts',
+                'clipboard',
+                'sortable'
+            ]);
+
             if (in_array('planning', $jslibs)) {
                 Html::requireJs('planning');
             }
@@ -1244,11 +1285,6 @@ HTML;
             if (in_array('reservations', $jslibs)) {
                 $tpl_vars['css_files'][] = ['path' => 'css/standalone/reservations.scss'];
                 Html::requireJs('reservations');
-            }
-
-            if (in_array('gantt', $jslibs)) {
-                $tpl_vars['css_files'][] = ['path' => 'public/lib/dhtmlx-gantt.css'];
-                Html::requireJs('gantt');
             }
 
             if (in_array('kanban', $jslibs)) {
@@ -1361,6 +1397,7 @@ HTML;
         $tpl_vars['css_files'][] = ['path' => 'css/palettes/' . $theme . '.scss'];
 
         $tpl_vars['js_files'][] = ['path' => 'public/lib/base.js'];
+        $tpl_vars['js_files'][] = ['path' => 'js/common.js'];
 
        // Search
         $tpl_vars['js_modules'][] = ['path' => 'js/modules/Search/ResultsView.js'];
@@ -1503,7 +1540,7 @@ HTML;
                             if (is_array($val)) {
                                 foreach ($val as $k => $object) {
                                     $menu[$key]['types'][] = $object;
-                                    if (method_exists($object, 'getIcon')) {
+                                    if (empty($menu[$key]['icon']) && method_exists($object, 'getIcon')) {
                                         $menu[$key]['icon']    = $object::getIcon();
                                     }
                                 }
@@ -1622,13 +1659,16 @@ HTML;
                 'content' => [
                     'ticket' => [
                         'links' => [
-                            'add'       => '/front/helpdesk.public.php?create_ticket=1',
                             'search'    => Ticket::getSearchURL(),
                             'lists'     => '',
                         ]
                     ]
                 ]
             ];
+
+            if (Session::haveRight("ticket", CREATE)) {
+                $menu['tickets']['content']['ticket']['links']['add'] = '/front/helpdesk.public.php?create_ticket=1';
+            }
         }
 
         if (Session::haveRight("reservation", ReservationItem::RESERVEANITEM)) {
@@ -1665,6 +1705,17 @@ HTML;
                     $link = "";
                     if (is_string($PLUGIN_HOOKS["helpdesk_menu_entry"][$plugin])) {
                         $link = $PLUGIN_HOOKS["helpdesk_menu_entry"][$plugin];
+
+                        // Ensure menu entries have all a starting `/`
+                        if (!str_starts_with($link, '/')) {
+                            $link = '/' . $link;
+                        }
+
+                        // Prefix with plugin path if plugin path is missing
+                        $plugin_dir = Plugin::getWebDir($plugin, false);
+                        if (!str_starts_with($link, '/' . $plugin_dir)) {
+                            $link = '/' . $plugin_dir . $link;
+                        }
                     }
                     $infos['page'] = $link;
                     $infos['title'] = $infos['name'];
@@ -1750,7 +1801,7 @@ HTML;
         $tpl_vars += self::getPageHeaderTplVars();
 
         $help_url_key = Session::getCurrentInterface() === 'central' ? 'central_doc_url' : 'helpdesk_doc_url';
-        $help_url = !empty($CFG_GLPI[$help_url_key]) ? $CFG_GLPI[$help_url_key] : 'http://glpi-project.org/help-central';
+        $help_url = !empty($CFG_GLPI[$help_url_key]) ? $CFG_GLPI[$help_url_key] : 'https://glpi-project.org/documentation/';
 
         $tpl_vars['help_url'] = $help_url;
 
@@ -1833,7 +1884,6 @@ HTML;
             }
         }
 
-        $tpl_vars['js_files'][] = ['path' => 'js/common.js'];
         $tpl_vars['js_files'][] = ['path' => 'js/misc.js'];
 
         if (isset($PLUGIN_HOOKS['add_javascript']) && count($PLUGIN_HOOKS['add_javascript'])) {
@@ -1987,7 +2037,7 @@ HTML;
         string $option = "",
         bool $add_id = true
     ) {
-        global $HEADER_LOADED;
+        global $HEADER_LOADED, $CFG_GLPI;
 
         // Print a nice HTML-head for help page
         if ($HEADER_LOADED) {
@@ -2212,17 +2262,22 @@ HTML;
     {
         global $CFG_GLPI;
 
-        Toolbox::deprecated('openArrowMassives() method is deprecated');
+        //Toolbox::deprecated('openArrowMassives() method is deprecated');
 
         if ($fixed) {
-            echo "<table class='tab_glpi' width='950px'>";
+            echo "<table width='950px'>";
         } else {
-            echo "<table class='tab_glpi' width='80%'>";
+            echo "<table width='80%'>";
+        }
+
+        $arrow = "fas fa-level-down-alt";
+        if (!$ontop) {
+            $arrow = "fas fa-level-up-alt";
         }
 
         echo "<tr>";
         if (!$onright) {
-            echo "<td><i class='fas fa-level-down-alt fa-flip-horizontal fa-lg mx-2'></i></td>";
+            echo "<td><i class='$arrow fa-flip-horizontal fa-lg mx-2'></i></td>";
         } else {
             echo "<td class='left' width='80%'></td>";
         }
@@ -2235,7 +2290,7 @@ HTML;
              href='#'>" . __('Uncheck all') . "</a></td>";
 
         if ($onright) {
-            echo "<td><i class='fas fa-level-down-alt fa-lg mx-2'></i>";
+            echo "<td><i class='$arrow fa-lg mx-2'></i>";
         } else {
             echo "<td class='left' width='80%'>";
         }
@@ -2253,7 +2308,7 @@ HTML;
     public static function closeArrowMassives($actions, $confirm = [])
     {
 
-        Toolbox::deprecated('closeArrowMassives() method is deprecated');
+        //Toolbox::deprecated('closeArrowMassives() method is deprecated');
 
         if (count($actions)) {
             foreach ($actions as $name => $label) {
@@ -2291,7 +2346,7 @@ HTML;
         $out  = "<input title='" . __s('Check all as') . "' type='checkbox' class='form-check-input'
                       title='" . __s('Check all as') . "'
                       name='_checkall_$rand' id='checkall_$rand'
-                      onclick= \"if ( checkAsCheckboxes('checkall_$rand', '$container_id')) {return true;}\">";
+                      onclick= \"if ( checkAsCheckboxes(this, '$container_id')) {return true;}\">";
 
        // permit to shift select checkboxes
         $out .= Html::scriptBlock("\$(function() {\$('#$container_id input[type=\"checkbox\"]').shiftSelectable();});");
@@ -2486,10 +2541,12 @@ HTML;
             $options['specific_tags']['data-glpicore-ma-tags'] = 'common';
         }
 
-       // encode quotes and brackets to prevent maformed name attribute
-        $id = htmlspecialchars($id, ENT_QUOTES);
-        $id = str_replace(['[', ']'], ['&amp;#91;', '&amp;#93;'], $id);
-        $options['name']          = "item[$itemtype][" . $id . "]";
+        if (empty($options['name'])) {
+            // encode quotes and brackets to prevent maformed name attribute
+            $id = htmlspecialchars($id, ENT_QUOTES);
+            $id = str_replace(['[', ']'], ['&amp;#91;', '&amp;#93;'], $id);
+            $options['name'] = "item[$itemtype][" . $id . "]";
+        }
 
         $options['zero_on_empty'] = false;
 
@@ -2677,7 +2734,7 @@ HTML;
                         $js_modal_fields .= '#' . $p['container'] . ' ';
                     }
                     $js_modal_fields .= "[data-glpicore-ma-tags~=" . $p['tag_to_send'] . "]').each(function( index ) {
-                  fields[$(this).attr('name')] = $(this).attr('value');
+                  fields[$(this).attr('name')] = $(this).val();
                   if (($(this).attr('type') == 'checkbox') && (!$(this).is(':checked'))) {
                      fields[$(this).attr('name')] = 0;
                   }
@@ -3516,7 +3573,9 @@ JS;
      *      - add_now, boolean to precise if we need to add to dates array, an entry for now time
      *        (with now class)
      *
-     * @return array of posible values
+     * @return void|string
+     *    void if option display=true
+     *    string if option display=false (HTML code)
      *
      * @see self::showGenericDateTimeSearch()
      **/
@@ -3756,7 +3815,7 @@ JS;
     /**
      * Init the Editor System to a textarea
      *
-     * @param string  $name          name of the html textarea to use
+     * @param string  $id            id of the html textarea to use
      * @param string  $rand          rand of the html textarea to use (if empty no image paste system)(default '')
      * @param boolean $display       display or get js script (true by default)
      * @param boolean $readonly      editor will be readonly or not
@@ -3766,7 +3825,7 @@ JS;
      *    integer if param display=true
      *    string if param display=false (HTML code)
      **/
-    public static function initEditorSystem($name, $rand = '', $display = true, $readonly = false, $enable_images = true)
+    public static function initEditorSystem($id, $rand = '', $display = true, $readonly = false, $enable_images = true)
     {
         global $CFG_GLPI, $DB;
 
@@ -3774,19 +3833,19 @@ JS;
         Html::requireJs('tinymce');
 
         $language = $_SESSION['glpilanguage'];
-        if (!file_exists(GLPI_ROOT . "/public/lib/tinymce-i18n/langs5/$language.js")) {
+        if (!file_exists(GLPI_ROOT . "/public/lib/tinymce-i18n/langs6/$language.js")) {
             $language = $CFG_GLPI["languages"][$_SESSION['glpilanguage']][2];
-            if (!file_exists(GLPI_ROOT . "/public/lib/tinymce-i18n/langs5/$language.js")) {
+            if (!file_exists(GLPI_ROOT . "/public/lib/tinymce-i18n/langs6/$language.js")) {
                 $language = "en_GB";
             }
         }
-        $language_url = $CFG_GLPI['root_doc'] . '/public/lib/tinymce-i18n/langs5/' . $language . '.js';
+        $language_url = $CFG_GLPI['root_doc'] . '/public/lib/tinymce-i18n/langs6/' . $language . '.js';
 
        // Apply all GLPI styles to editor content
-        $content_css = preg_replace('/^.*href="([^"]+)".*$/', '$1', self::scss('css/palettes/' . $_SESSION['glpipalette'] ?? 'auror'))
-         . ',' . preg_replace('/^.*href="([^"]+)".*$/', '$1', self::css('public/lib/base.css'));
+        $content_css = preg_replace('/^.*href="([^"]+)".*$/', '$1', self::scss(('css/palettes/' . $_SESSION['glpipalette'] ?? 'auror') . '.scss', ['force_no_version' => true]))
+         . ',' . preg_replace('/^.*href="([^"]+)".*$/', '$1', self::css('public/lib/base.css', ['force_no_version' => true]));
 
-        $cache_suffix = '?v=' . GLPI_VERSION;
+        $cache_suffix = '?v=' . FrontEnd::getVersionCacheKey(GLPI_VERSION);
         $readonlyjs   = $readonly ? 'true' : 'false';
 
         $invalid_elements = 'applet,canvas,embed,form,object';
@@ -3804,10 +3863,8 @@ JS;
             'fullscreen',
             'link',
             'lists',
-            'paste',
             'quickbars',
             'searchreplace',
-            'tabfocus',
             'table',
         ];
         if ($enable_images) {
@@ -3834,8 +3891,10 @@ JS;
 
             // init editor
             tinyMCE.init(Object.assign({
+               link_default_target: '_blank',
                branding: false,
-               selector: '#{$name}',
+               selector: '#{$id}',
+               text_patterns: false,
 
                plugins: {$pluginsjs},
 
@@ -3846,7 +3905,7 @@ JS;
                body_class: 'rich_text_container',
                content_css: '{$content_css}',
 
-               min_height: '150px',
+               min_height: 150,
                resize: true,
 
                // disable path indicator in bottom bar
@@ -3855,20 +3914,21 @@ JS;
                // inline toolbar configuration
                menubar: false,
                toolbar: richtext_layout == 'classic'
-                  ? 'styleselect | bold italic | forecolor backcolor | bullist numlist outdent indent | emoticons table link image | code fullscreen'
+                  ? 'styles | bold italic | forecolor backcolor | bullist numlist outdent indent | emoticons table link image | code fullscreen'
                   : false,
                quickbars_insert_toolbar: richtext_layout == 'inline'
                   ? 'emoticons quicktable quickimage quicklink | bullist numlist | outdent indent '
                   : false,
                quickbars_selection_toolbar: richtext_layout == 'inline'
-                  ? 'bold italic | styleselect | forecolor backcolor '
+                  ? 'bold italic | styles | forecolor backcolor '
                   : false,
-               contextmenu: 'emoticons table image link | undo redo | code fullscreen',
+               contextmenu: richtext_layout == 'classic'
+                  ? false
+                  : 'copy paste | emoticons table image link | undo redo | code fullscreen',
 
                // Content settings
                entity_encoding: 'raw',
                invalid_elements: '{$invalid_elements}',
-               paste_data_images: true,
                readonly: {$readonlyjs},
                relative_urls: false,
                remove_script_host: false,
@@ -3879,11 +3939,11 @@ JS;
 
                setup: function(editor) {
                   // "required" state handling
-                  if ($('#$name').attr('required') == 'required') {
-                     $('#$name').removeAttr('required'); // Necessary to bypass browser validation
+                  if ($('#$id').attr('required') == 'required') {
+                     $('#$id').removeAttr('required'); // Necessary to bypass browser validation
 
                      editor.on('submit', function (e) {
-                        if ($('#$name').val() == '') {
+                        if ($('#$id').val() == '') {
                            alert(__('The description field is mandatory'));
                            e.preventDefault();
 
@@ -3894,14 +3954,14 @@ JS;
                      });
                      editor.on('keyup', function (e) {
                         editor.save();
-                        if ($('#$name').val() == '') {
+                        if ($('#$id').val() == '') {
                            $(editor.container).addClass('required');
                         } else {
                            $(editor.container).removeClass('required');
                         }
                      });
                      editor.on('init', function (e) {
-                        if (strip_tags($('#$name').val()) == '') {
+                        if (strip_tags($('#$id').val()) == '') {
                            $(editor.container).addClass('required');
                         }
                      });
@@ -3921,7 +3981,7 @@ JS;
                   // ctrl + enter submit the parent form
                   editor.addShortcut('ctrl+13', 'submit', function() {
                      editor.save();
-                     submitparentForm($('#$name'));
+                     submitparentForm($('#$id'));
                   });
                }
             }, {$language_opts}));
@@ -4647,7 +4707,7 @@ JAVASCRIPT
             $placeholder
             width: '$width',
             dropdownAutoWidth: true,
-            dropdownParent: $('#$id').closest('div.modal, body'),
+            dropdownParent: $('#$id').closest('div.modal, div.dropdown-menu, body'),
             quietMillis: 100,
             minimumResultsForSearch: " . $CFG_GLPI['ajax_limit_count'] . ",
             matcher: function(params, data) {
@@ -4781,7 +4841,6 @@ JAVASCRIPT
             'display_emptychoice' => false,
             'specific_tags'       => [],
             'parent_id_field'     => null,
-            'multiple'            => false,
         ];
         $params = array_merge($default_options, $params);
 
@@ -4853,7 +4912,7 @@ JAVASCRIPT
             minimumInputLength: 0,
             quietMillis: 100,
             dropdownAutoWidth: true,
-            dropdownParent: $('#$field_id').closest('div.modal, body'),
+            dropdownParent: $('#$field_id').closest('div.modal, div.dropdown-menu, body'),
             minimumResultsForSearch: " . $CFG_GLPI['ajax_limit_count'] . ",
             ajax: {
                url: '$url',
@@ -5355,8 +5414,11 @@ HTML;
         $url = self::getPrefixedUrl($url);
 
         if ($version) {
-            $url .= '?v=' . $version;
+            $url .= '?v=' . FrontEnd::getVersionCacheKey($version);
         }
+
+        // Convert filesystem path to URL path (fix issues with Windows directory separator)
+        $url = str_replace(DIRECTORY_SEPARATOR, '/', $url);
 
         return sprintf('<script type="%s" src="%s"></script>', $type, $url);
     }
@@ -5432,13 +5494,18 @@ HTML;
             $options['media'] = 'all';
         }
 
-        $version = GLPI_VERSION;
-        if (isset($options['version'])) {
-            $version = $options['version'];
-            unset($options['version']);
+        if (!isset($options['force_no_version']) || !$options['force_no_version']) {
+            $version = GLPI_VERSION;
+            if (isset($options['version'])) {
+                $version = $options['version'];
+                unset($options['version']);
+            }
+
+            $url .= ((strpos($url, '?') !== false) ? '&' : '?') . 'v=' . FrontEnd::getVersionCacheKey($version);
         }
 
-        $url .= ((strpos($url, '?') !== false) ? '&' : '?') . 'v=' . $version;
+        // Convert filesystem path to URL path (fix issues with Windows directory separator)
+        $url = str_replace(DIRECTORY_SEPARATOR, '/', $url);
 
         return sprintf(
             '<link rel="stylesheet" type="text/css" href="%s" %s>',
@@ -5546,6 +5613,7 @@ HTML;
         $display .= "<input id='fileupload{$p['rand']}' type='file' name='_uploader_" . $p['name'] . "[]'
                       class='form-control'
                       $required
+                      data-uploader-name=\"{$p['name']}\"
                       data-url='" . $CFG_GLPI["root_doc"] . "/ajax/fileupload.php'
                       data-form-data='{\"name\": \"_uploader_" . $p['name'] . "\", \"showfilesize\": \"" . $p['showfilesize'] . "\"}'"
                       . ($p['multiple'] ? " multiple='multiple'" : "")
@@ -5845,7 +5913,8 @@ HTML;
             $number_columns += 1;
         }
 
-       // count checked
+        // count checked
+        $nb_cb_per_col = [];
         foreach ($columns as $col_name => $column) {
             $nb_cb_per_col[$col_name] = [
                 'total'   => 0,
@@ -5853,6 +5922,7 @@ HTML;
             ];
         }
 
+        $nb_cb_per_row = [];
         foreach ($rows as $row_name => $row) {
             if ((!is_string($row)) && (!is_array($row))) {
                 continue;
@@ -6162,7 +6232,7 @@ HTML;
      */
     public static function getCopyrightMessage($withVersion = true)
     {
-        $message = "<a href=\"http://glpi-project.org/\" title=\"Powered by Teclib and contributors\" class=\"copyright\">";
+        $message = "<a href=\"https://glpi-project.org/\" title=\"Powered by Teclib and contributors\" class=\"copyright\">";
         $message .= "GLPI ";
        // if required, add GLPI version (eg not for login page)
         if ($withVersion) {
@@ -6227,10 +6297,6 @@ HTML;
                         }
                     }
                 }
-                break;
-            case 'gantt':
-                $_SESSION['glpi_js_toload'][$name][] = 'public/lib/dhtmlx-gantt.js';
-                $_SESSION['glpi_js_toload'][$name][] = 'js/gantt-helper.js';
                 break;
             case 'kanban':
                 break;
@@ -6343,7 +6409,6 @@ HTML;
         }
 
        // Some Javascript-Functions which we may need later
-        echo Html::script('js/common.js');
         self::redefineAlert();
         self::redefineConfirm();
 
@@ -6360,9 +6425,6 @@ HTML;
          });";
             echo Html::scriptBlock($js);
         }
-
-       // add Ajax display message after redirect
-        Html::displayAjaxMessageAfterRedirect();
 
        // Add specific javascript for plugins
         if (isset($PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]) && count($PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT])) {
@@ -6432,16 +6494,18 @@ HTML;
     {
         global $CFG_GLPI;
 
+        // prevent leak of data for non logged sessions
+        $full = $full && (Session::getLoginUserID(true) !== false);
+
         $cfg_glpi = "var CFG_GLPI  = {
-         'url_base': '" . (isset($CFG_GLPI['url_base']) ? $CFG_GLPI["url_base"] : '') . "',
-         'root_doc': '" . $CFG_GLPI["root_doc"] . "',
-      };";
+            'url_base': '" . (isset($CFG_GLPI['url_base']) ? $CFG_GLPI["url_base"] : '') . "',
+            'root_doc': '" . $CFG_GLPI["root_doc"] . "',
+        };";
 
         if ($full) {
             $debug = (isset($_SESSION['glpi_use_mode'])
                    && $_SESSION['glpi_use_mode'] == Session::DEBUG_MODE ? true : false);
             $cfg_glpi = "var CFG_GLPI  = " . json_encode(Config::getSafeConfig(true), $debug ? JSON_PRETTY_PRINT : 0) . ";";
-            $cfg_glpi .= "CFG_GLPI['gantt_date_format'] = " . json_encode(Toolbox::getDateFormat('gantt')) . ";";
         }
 
         $plugins_path = [];
@@ -6451,9 +6515,9 @@ HTML;
         $plugins_path = 'var GLPI_PLUGINS_PATH = ' . json_encode($plugins_path) . ';';
 
         return self::scriptBlock("
-         $cfg_glpi
-         $plugins_path
-      ");
+            $cfg_glpi
+            $plugins_path
+        ");
     }
 
     /**
@@ -6805,7 +6869,7 @@ HTML;
         } catch (\Throwable $e) {
             ErrorHandler::getInstance()->handleException($e, true);
             if (isset($args['debug'])) {
-                $msg = 'An error occured during SCSS compilation: ' . $e->getMessage();
+                $msg = 'An error occurred during SCSS compilation: ' . $e->getMessage();
                 $msg = str_replace(["\n", "\"", "'"], ['\00000a', '\0022', '\0027'], $msg);
                 $css = <<<CSS
               html::before {
@@ -6891,13 +6955,7 @@ CSS;
     {
         $file = preg_replace('/\.scss$/', '', $file);
 
-        return implode(
-            DIRECTORY_SEPARATOR,
-            [
-                self::getScssCompileDir(),
-                str_replace('/', '_', $file) . '.min.css',
-            ]
-        );
+        return self::getScssCompileDir() . '/' . str_replace('/', '_', $file) . '.min.css';
     }
 
     /**
@@ -6926,12 +6984,16 @@ CSS;
         if (!ctype_digit($ts)) {
             $ts = strtotime($ts);
         }
+        $ts_date = new DateTime();
+        $ts_date->setTimestamp($ts);
 
         $diff = time() - $ts;
         if ($diff == 0) {
             return __('Now');
         } else if ($diff > 0) {
-            $day_diff = floor($diff / 86400);
+            $date = new DateTime(date('Y-m-d', $ts));
+            $today = new DateTime('today');
+            $day_diff = $date->diff($today)->days;
             if ($day_diff == 0) {
                 if ($diff < 60) {
                     return __('Just now');
@@ -6946,20 +7008,22 @@ CSS;
             if ($day_diff == 1) {
                 return __('Yesterday');
             }
-            if ($day_diff < 7) {
+            if ($day_diff < 14) {
                 return sprintf(__('%s days ago'), $day_diff);
             }
             if ($day_diff < 31) {
-                return sprintf(__('%s weeks ago'), ceil($day_diff / 7));
+                return sprintf(__('%s weeks ago'), floor($day_diff / 7));
             }
             if ($day_diff < 60) {
                 return __('Last month');
             }
 
-            return date('F Y', $ts);
+            return IntlDateFormatter::formatObject($ts_date, 'MMMM Y', $_SESSION['glpilanguage'] ?? 'en_GB');
         } else {
             $diff     = abs($diff);
-            $day_diff = floor($diff / 86400);
+            $today = new DateTime('today');
+            $date = new DateTime(date('Y-m-d', $ts));
+            $day_diff = $today->diff($date)->days;
             if ($day_diff == 0) {
                 if ($diff < 120) {
                     return __('In a minute');
@@ -6977,19 +7041,17 @@ CSS;
             if ($day_diff == 1) {
                 return __('Tomorrow');
             }
-            if ($day_diff < 4) {
-                return date('l', $ts);
+            if ($day_diff < 14) {
+                return sprintf(__('In %s days'), $day_diff);
             }
-            if ($day_diff < 7 + (7 - date('w'))) {
-                return __('next week');
+            if ($day_diff < 31) {
+                return sprintf(__('In %s weeks'), floor($day_diff / 7));
             }
-            if (ceil($day_diff / 7) < 4) {
-                return sprintf(__('In %s weeks'), ceil($day_diff / 7));
+            if ($day_diff < 60) {
+                return __('Next month');
             }
-            if (date('n', $ts) == date('n') + 1) {
-                return __('next month');
-            }
-            return date('F Y', $ts);
+
+            return IntlDateFormatter::formatObject($ts_date, 'MMMM Y', $_SESSION['glpilanguage'] ?? 'en_GB');
         }
 
         return "";

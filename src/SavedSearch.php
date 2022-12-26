@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -794,30 +796,18 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
             ],
             'FROM'      => $table,
             'LEFT JOIN' => [
-                $utable => ['ON' => [
-                    $utable  => 'savedsearches_id',
-                    $table   => 'id', [
-                        'AND' => [
-                            "$table.itemtype"  => new \QueryExpression("$utable.itemtype"),
-                            "$utable.users_id" => Session::getLoginUserID()
-                        ]
+                $utable => [
+                    'ON' => [
+                        $utable  => 'savedsearches_id',
+                        $table   => 'id'
                     ]
-                ]
-                ]
-            ],
-            'WHERE'     => [
-                'OR' => [
-                    [
-                        "$table.is_private" => 0,
-                    ] + getEntitiesRestrictCriteria($table, '', '', true),
-                    "$table.users_id"   => Session::getLoginUserID()
                 ]
             ],
             'ORDERBY'   => [
                 'itemtype',
                 'name'
             ]
-        ];
+        ] + self::getVisibilityCriteriaForMine();
 
         if ($itemtype != null) {
             if (!$inverse) {
@@ -835,8 +825,6 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
         foreach ($iterator as $data) {
             if ($_SESSION['glpishow_count_on_tabs']) {
                 $this->fields = $data;
-                $search_data = $this->execute(false, $enable_partial_warnings);
-
                 $count = null;
                 try {
                     $search_data = $this->execute(false, $enable_partial_warnings);
@@ -915,8 +903,6 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
      **/
     public static function showSaveButton($type, $itemtype = 0, bool $active = false)
     {
-        global $CFG_GLPI;
-
         echo "<a href='#' class='btn btn-ghost-secondary btn-icon btn-sm me-1 bookmark_record save'
              title='" . __s('Save current search') . "'>";
         echo "<i class='ti ti-star " . ($active ? 'active' : '') . "'></i>";
@@ -934,9 +920,9 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
             $params['id'] = $_GET['savedsearches_id'];
         }
 
-        $url = $CFG_GLPI['root_doc'] . "/ajax/savedsearch.php?" . http_build_query($params);
+        $json_params = htmlspecialchars(json_encode($params), ENT_QUOTES);
 
-        echo "<div id='savedsearch-modal' class='modal' data-url='$url'></div>";
+        echo "<div id='savedsearch-modal' class='modal' data-params='$json_params'></div>";
     }
 
 
@@ -1263,6 +1249,8 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
                     $this->getField('itemtype'),
                     $params
                 );
+                // force saved search ID to indicate to Search to save execution time
+                $data['search']['savedsearches_id'] = $this->getID();
                 $data['search']['sort'] = [];
                 $search->constructSQL($data);
                 $search->constructData($data, true);
@@ -1325,22 +1313,9 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
         return $sql;
     }
 
-    /**
-     * Return visibility joins to add to DBIterator parameters
-     *
-     * @since 9.4
-     *
-     * @param boolean $forceall force all joins (false by default)
-     *
-     * @return array
-     */
-    public static function getVisibilityCriteria(bool $forceall = false): array
+    private static function getVisibilityCriteriaForMine(): array
     {
         $criteria = ['WHERE' => []];
-        if (Session::haveRight('config', UPDATE)) {
-            return $criteria;
-        }
-
         $restrict = [
             self::getTable() . '.is_private' => 1,
             self::getTable() . '.users_id'    => Session::getLoginUserID()
@@ -1357,6 +1332,24 @@ class SavedSearch extends CommonDBTM implements ExtraVisibilityCriteria
 
         $criteria['WHERE'] = $restrict;
         return $criteria;
+    }
+
+    /**
+     * Return visibility joins to add to DBIterator parameters
+     *
+     * @since 9.4
+     *
+     * @param boolean $forceall force all joins (false by default)
+     *
+     * @return array
+     */
+    public static function getVisibilityCriteria(bool $forceall = false): array
+    {
+        if (Session::haveRight('config', UPDATE)) {
+            return ['WHERE' => []];
+        }
+
+        return self::getVisibilityCriteriaForMine();
     }
 
 

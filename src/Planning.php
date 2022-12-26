@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,23 +17,25 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 use Glpi\Application\ErrorHandler;
 use Glpi\RichText\RichText;
+use Glpi\Toolbox\Sanitizer;
 use RRule\RRule;
 use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\Component\VEvent;
@@ -160,6 +163,7 @@ class Planning extends CommonGLPI
                 ]
             ];
         }
+        return false;
     }
 
 
@@ -658,6 +662,8 @@ class Planning extends CommonGLPI
                 'license_key'  => $scheduler_key,
                 'resources'    => self::getTimelineResources(),
                 'now'          => date("Y-m-d H:i:s"),
+                'can_create'   => PlanningExternalEvent::canCreate(),
+                'can_delete'   => PlanningExternalEvent::canPurge(),
             ];
         } else {
            // short view (on Central page)
@@ -777,7 +783,7 @@ class Planning extends CommonGLPI
     public static function getPaletteColor($palette_name = 'bg', $color_index = 0)
     {
         if ($palette = self::getPalette($palette_name)) {
-            if ($color_index > count($palette)) {
+            if ($color_index >= count($palette)) {
                 $color_index = $color_index % count($palette);
             }
 
@@ -998,7 +1004,14 @@ class Planning extends CommonGLPI
             echo "<i class='actor_icon fa fa-fw fa-$icon'></i>";
         }
 
-        echo "<label for='$filter_key'>$title</label>";
+        echo "<label for='$filter_key'>";
+        echo $title;
+        $raw_url = Sanitizer::decodeHtmlSpecialChars($filter_data['url'] ?? '');
+        if ($filter_data['type'] == 'external' && !Toolbox::isUrlSafe($raw_url)) {
+            $warning = sprintf(__s('URL "%s" is not allowed by your administrator.'), $filter_data['url']);
+            echo "<i class='fas fa-exclamation-triangle' title='{$warning}'></i>";
+        }
+        echo "</label>";
 
         $color = self::$palette_bg[$params['filter_color_index']];
         if (isset($filter_data['color']) && !empty($filter_data['color'])) {
@@ -1267,7 +1280,10 @@ class Planning extends CommonGLPI
     {
         if (!$params['itemtype'] instanceof CommonDBTM) {
             echo "<div class='center'>";
-            echo "<a href='" . $params['url'] . "'>" . __("View this item in his context") . "</a>";
+            echo "<a href='" . $params['url'] . "' class='btn btn-outline-secondary'>" .
+                "<i class='ti ti-eye'></i>" .
+                "<span>" . __("View this item in its context") . "</span>" .
+            "</a>";
             echo "</div>";
             echo "<hr>";
             $rand = mt_rand();
@@ -1388,6 +1404,16 @@ class Planning extends CommonGLPI
      */
     public static function sendAddExternalForm($params = [])
     {
+        $raw_url = Sanitizer::decodeHtmlSpecialChars($params['url']);
+        if (!Toolbox::isUrlSafe($raw_url)) {
+            Session::addMessageAfterRedirect(
+                sprintf(__('URL "%s" is not allowed by your administrator.'), $params['url']),
+                false,
+                ERROR
+            );
+            return;
+        }
+
         $_SESSION['glpi_plannings']['plannings']['external_' . md5($params['url'])] = [
             'color'   => self::getPaletteColor('bg', $_SESSION['glpi_plannings_color_index']),
             'display' => true,
@@ -1547,6 +1573,9 @@ class Planning extends CommonGLPI
         echo "<tr class='tab_bg_2'><td>" . __('Period') . "&nbsp;";
 
         if (isset($params["rand_user"])) {
+            $_POST['parent_itemtype'] = $params["parent_itemtype"] ?? '';
+            $_POST['parent_items_id'] = $params["parent_items_id"] ?? '';
+            $_POST['parent_fk_field'] = $params["parent_fk_field"] ?? '';
             echo "<span id='user_available" . $params["rand_user"] . "'>";
             include_once(GLPI_ROOT . '/ajax/planningcheck.php');
             echo "</span>";
@@ -2152,7 +2181,8 @@ class Planning extends CommonGLPI
             if ('external' !== $planning_params['type'] || !$planning_params['display']) {
                 continue; // Ignore non external and inactive calendars
             }
-            $calendar_data = Toolbox::getURLContent($planning_params['url']);
+            $raw_url = Sanitizer::decodeHtmlSpecialChars($planning_params['url']);
+            $calendar_data = Toolbox::getURLContent($raw_url);
             if (empty($calendar_data)) {
                 continue;
             }
@@ -2160,14 +2190,14 @@ class Planning extends CommonGLPI
                 $vcalendar = Reader::read($calendar_data);
             } catch (\Sabre\VObject\ParseException $exception) {
                 trigger_error(
-                    sprintf('Unable to parse calendar data from URL "%s"', $planning_params['url']),
+                    sprintf('Unable to parse calendar data from URL "%s"', $raw_url),
                     E_USER_WARNING
                 );
                 continue;
             }
             if (!$vcalendar instanceof VCalendar) {
                 trigger_error(
-                    sprintf('No VCalendar object found at URL "%s"', $planning_params['url']),
+                    sprintf('No VCalendar object found at URL "%s"', $raw_url),
                     E_USER_WARNING
                 );
                 continue;
@@ -2375,6 +2405,8 @@ class Planning extends CommonGLPI
                 }
             }
         }
+
+        return false;
     }
 
     /**
@@ -2486,7 +2518,7 @@ class Planning extends CommonGLPI
      * @param $whogroup        group ID
      * @param $limititemtype   itemtype only display this itemtype (default '')
      *
-     * @return icalendar string
+     * @return void Outputs ical contents
      **/
     public static function generateIcal($who, $whogroup, $limititemtype = '')
     {
@@ -2496,7 +2528,7 @@ class Planning extends CommonGLPI
             ($who === 0)
             && ($whogroup === 0)
         ) {
-            return false;
+            return;
         }
 
         if (!empty($CFG_GLPI["version"])) {

@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -103,7 +105,7 @@ class Socket extends CommonDBChild
 
         global $CFG_GLPI;
 
-       //if form is called from an item, retrive itemtype and items
+        //if form is called from an item, retrieve itemtype and items
         if (isset($options['_add_fromitem'])) {
             $itemtype = $options['_add_fromitem']["_from_itemtype"];
             $items_id = $options['_add_fromitem']["_from_items_id"];
@@ -147,7 +149,8 @@ class Socket extends CommonDBChild
             'display_emptychoice' => true,
             'condition'           => ['items_id' => $items_id,
                 'itemtype' => $itemtype
-            ]
+            ],
+            'comments' => false
         ]);
         echo "</span>";
 
@@ -416,13 +419,13 @@ class Socket extends CommonDBChild
         $tab[] = [
             'id'                 => '1310',
             'table'              => Socket::getTable(),
-            'field'              => 'id',
+            'field'              => 'name',
             'name'               => Socket::getTypeName(0),
             'searchtype'         => 'equals',
             'joinparams'         => [
                 'jointype'           => 'itemtype_item',
             ],
-            'datatype'           => 'dropdown'
+            'datatype'           => 'itemlink'
         ];
 
         $tab[] = [
@@ -562,7 +565,7 @@ class Socket extends CommonDBChild
         if ($parent) {
             $changes[0] = '0';
             $changes[1] = '';
-            $changes[2] = addslashes($this->getNameID());
+            $changes[2] = addslashes($this->getNameID(['forceid' => true]));
             Log::history($parent, 'Location', $changes, $this->getType(), Log::HISTORY_ADD_SUBITEM);
         }
 
@@ -600,7 +603,7 @@ class Socket extends CommonDBChild
         $parent = $this->fields['locations_id'];
         if ($parent) {
             $changes[0] = '0';
-            $changes[1] = addslashes($this->getNameID());
+            $changes[1] = addslashes($this->getNameID(['forceid' => true]));
             $changes[2] = '';
             Log::history($parent, 'Location', $changes, $this->getType(), Log::HISTORY_DELETE_SUBITEM);
         }
@@ -731,6 +734,8 @@ class Socket extends CommonDBChild
         $header_end .= "<th>" . __('Wiring side') . "</th>";
         $header_end .= "<th>" .  _n('Network port', 'Network ports', Session::getPluralNumber()) . "</th>";
         $header_end .= "<th>" .  Cable::getTypeName(0) . "</th>";
+        $header_end .= "<th>" .  __('Itemtype') . "</th>";
+        $header_end .= "<th>" .  __('Item Name') . "</th>";
         $header_end .= "</tr>\n";
         echo $header_begin . $header_top . $header_end;
 
@@ -781,6 +786,26 @@ class Socket extends CommonDBChild
             ) {
                 echo "<td><a href='" . $cable->getLinkURL() . "'>" . $cable->getName() . "</a></td>";
             } else {
+                echo "<td></td>";
+            }
+
+            if (
+                $cable->fields['itemtype_endpoint_a'] === $item->getType()
+                && $cable->fields['items_id_endpoint_a'] === $item->getID()
+            ) {
+                $itemtype = $cable->fields['itemtype_endpoint_b'];
+                $item_id = $cable->fields['items_id_endpoint_b'];
+            } else {
+                $itemtype = $cable->fields['itemtype_endpoint_a'];
+                $item_id = $cable->fields['items_id_endpoint_a'];
+            }
+
+            $endpoint = getItemForItemtype($itemtype);
+            if ($endpoint !== false && $item_id !== 0 && $endpoint->getFromDB($item_id)) {
+                echo "<td>" . $endpoint->getType() . "</td>";
+                echo "<td><a href='" . $endpoint->getLinkURL() . "'>" . $endpoint->getName() . "</a></td>";
+            } else {
+                echo "<td></td>";
                 echo "<td></td>";
             }
 

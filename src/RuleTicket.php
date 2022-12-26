@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -646,6 +648,26 @@ class RuleTicket extends Rule
         $criterias['_x-priority']['name']                     = __('X-Priority email header');
         $criterias['_x-priority']['table']                    = '';
         $criterias['_x-priority']['type']                     = 'text';
+
+        $criterias['_from']['name']                           = __('From email header');
+        $criterias['_from']['table']                          = '';
+        $criterias['_from']['type']                           = 'text';
+
+        $criterias['_subject']['name']                        = __('Subject email header');
+        $criterias['_subject']['table']                       = '';
+        $criterias['_subject']['type']                        = 'text';
+
+        $criterias['_reply-to']['name']                       = __('Reply-To email header');
+        $criterias['_reply-to']['table']                      = '';
+        $criterias['_reply-to']['type']                       = 'text';
+
+        $criterias['_in-reply-to']['name']                    = __('In-Reply-To email header');
+        $criterias['_in-reply-to']['table']                   = '';
+        $criterias['_in-reply-to']['type']                    = 'text';
+
+        $criterias['_to']['name']                             = __('To email header');
+        $criterias['_to']['table']                            = '';
+        $criterias['_to']['type']                             = 'text';
 
         $criterias['slas_id_ttr']['table']                    = 'glpi_slas';
         $criterias['slas_id_ttr']['field']                    = 'name';

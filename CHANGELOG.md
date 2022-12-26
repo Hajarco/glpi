@@ -3,7 +3,67 @@
 The present file will list all changes made to the project; according to the
 [Keep a Changelog](http://keepachangelog.com/) project.
 
-## [10.0.0] unreleased
+## [10.0.6] unreleased
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### API changes
+
+#### Added
+
+#### Changes
+
+#### Deprecated
+
+#### Removed
+
+## [10.0.5] 2022-11-04
+
+## [10.0.4] 2022-11-03
+
+## [10.0.3] 2022-09-14
+
+### API changes
+
+#### Added
+
+- `CommonDBTM::pre_addToDB()` added.
+
+#### Removed
+
+## [10.0.2] 2022-06-28
+
+## [10.0.1] 2022-06-02
+
+### Changed
+- PDF export library has been changed back from `mPDF` to `TCPDF`.
+
+### Removed
+- Gantt feature has been moved into the `gantt` plugin.
+
+### API changes
+
+#### Added
+- `plugin_xxx_activate()` and `plugin_xxx_deactivate` hooks support.
+
+#### Changes
+- `Glpi\Api\Api::initEndpoint()` visibility changed to `protected`.
+
+#### Removed
+- `GlpiGantt` javascript helper and `dhtmlx-gantt` library.
+- `Glpi\Gantt` namespace and all corresponding classes.
+- `Project::getDataToDisplayOnGantt()`
+- `Project::showGantt()`
+- `ProjectTask::getDataToDisplayOnGantt()`
+- `ProjectTask::getDataToDisplayOnGanttForProject()`
+
+## [10.0.0] 2022-04-20
 
 ### Added
 - Added UUID to all other itemtypes that are related to Operating Systems (Phones, Printers, etc)
@@ -77,6 +137,7 @@ The present file will list all changes made to the project; according to the
 - `MailCollector::listEncodings()`
 - `RuleImportComputer` class
 - `RuleImportComputerCollection` class
+- `SLM::setTicketCalendar()`
 - `Toolbox::clean_cross_side_scripting_deep()`
 - `Toolbox::endsWith()`
 - `Toolbox::filesizeDirectory()`

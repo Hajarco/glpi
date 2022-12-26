@@ -1,12 +1,13 @@
 --
 -- ---------------------------------------------------------------------
+--
 -- GLPI - Gestionnaire Libre de Parc Informatique
--- Copyright (C) 2015-2022 Teclib' and contributors.
 --
 -- http://glpi-project.org
 --
--- based on GLPI - Gestionnaire Libre de Parc Informatique
--- Copyright (C) 2003-2014 by the INDEPNET Development Team.
+-- @copyright 2015-2022 Teclib' and contributors.
+-- @copyright 2003-2014 by the INDEPNET Development Team.
+-- @licence   https://www.gnu.org/licenses/gpl-3.0.html
 --
 -- ---------------------------------------------------------------------
 --
@@ -14,18 +15,19 @@
 --
 -- This file is part of GLPI.
 --
--- GLPI is free software; you can redistribute it and/or modify
+-- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
--- the Free Software Foundation; either version 2 of the License, or
+-- the Free Software Foundation, either version 3 of the License, or
 -- (at your option) any later version.
 --
--- GLPI is distributed in the hope that it will be useful,
+-- This program is distributed in the hope that it will be useful,
 -- but WITHOUT ANY WARRANTY; without even the implied warranty of
 -- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 -- GNU General Public License for more details.
 --
 -- You should have received a copy of the GNU General Public License
--- along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+-- along with this program.  If not, see <https://www.gnu.org/licenses/>.
+--
 -- ---------------------------------------------------------------------
 --
 
@@ -981,6 +983,7 @@ CREATE TABLE `glpi_computers` (
   `date_creation` timestamp NULL DEFAULT NULL,
   `is_recursive` tinyint NOT NULL DEFAULT '0',
   `last_inventory_update` timestamp NULL DEFAULT NULL,
+  `last_boot` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `date_mod` (`date_mod`),
   KEY `name` (`name`),
@@ -1143,6 +1146,7 @@ CREATE TABLE `glpi_items_operatingsystems` (
   `is_dynamic` tinyint NOT NULL DEFAULT '0',
   `entities_id` int unsigned NOT NULL DEFAULT '0',
   `is_recursive` tinyint NOT NULL DEFAULT '0',
+  `install_date` date NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unicity` (`items_id`,`itemtype`,`operatingsystems_id`,`operatingsystemarchitectures_id`),
   KEY `item` (`itemtype`,`items_id`),
@@ -1631,8 +1635,8 @@ DROP TABLE IF EXISTS `glpi_dashboards_items`;
 CREATE TABLE `glpi_dashboards_items` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
   `dashboards_dashboards_id` int unsigned NOT NULL,
-  `gridstack_id` varchar(100) NOT NULL,
-  `card_id` varchar(100) NOT NULL,
+  `gridstack_id` varchar(255) NOT NULL,
+  `card_id` varchar(255) NOT NULL,
   `x` int DEFAULT NULL,
   `y` int DEFAULT NULL,
   `width` int DEFAULT NULL,
@@ -2045,10 +2049,12 @@ CREATE TABLE `glpi_items_devicecameras_imageformats` (
   `item_devicecameras_id` int unsigned NOT NULL DEFAULT '0',
   `imageformats_id` int unsigned NOT NULL DEFAULT '0',
   `is_dynamic` tinyint NOT NULL DEFAULT '0',
+  `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `item_devicecameras_id` (`item_devicecameras_id`),
   KEY `imageformats_id` (`imageformats_id`),
-  KEY `is_dynamic` (`is_dynamic`)
+  KEY `is_dynamic` (`is_dynamic`),
+  KEY `is_deleted` (`is_deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;
 
 DROP TABLE IF EXISTS `glpi_items_devicecameras_imageresolutions`;
@@ -2057,10 +2063,12 @@ CREATE TABLE `glpi_items_devicecameras_imageresolutions` (
   `item_devicecameras_id` int unsigned NOT NULL DEFAULT '0',
   `imageresolutions_id` int unsigned NOT NULL DEFAULT '0',
   `is_dynamic` tinyint NOT NULL DEFAULT '0',
+  `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `item_devicecameras_id` (`item_devicecameras_id`),
   KEY `imageresolutions_id` (`imageresolutions_id`),
-  KEY `is_dynamic` (`is_dynamic`)
+  KEY `is_dynamic` (`is_dynamic`),
+  KEY `is_deleted` (`is_deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;
 
 
@@ -6464,6 +6472,7 @@ CREATE TABLE `glpi_slms` (
   `entities_id` int unsigned NOT NULL DEFAULT '0',
   `is_recursive` tinyint NOT NULL DEFAULT '0',
   `comment` text,
+  `use_ticket_calendar` tinyint NOT NULL DEFAULT '0',
   `calendars_id` int unsigned NOT NULL DEFAULT '0',
   `date_mod` timestamp NULL DEFAULT NULL,
   `date_creation` timestamp NULL DEFAULT NULL,
@@ -6487,6 +6496,7 @@ CREATE TABLE `glpi_slas` (
   `type` int NOT NULL DEFAULT '0',
   `comment` text,
   `number_time` int NOT NULL,
+  `use_ticket_calendar` tinyint NOT NULL DEFAULT '0',
   `calendars_id` int unsigned NOT NULL DEFAULT '0',
   `date_mod` timestamp NULL DEFAULT NULL,
   `definition_time` varchar(255) DEFAULT NULL,
@@ -6514,6 +6524,7 @@ CREATE TABLE `glpi_olas` (
   `type` int NOT NULL DEFAULT '0',
   `comment` text,
   `number_time` int NOT NULL,
+  `use_ticket_calendar` tinyint NOT NULL DEFAULT '0',
   `calendars_id` int unsigned NOT NULL DEFAULT '0',
   `date_mod` timestamp NULL DEFAULT NULL,
   `definition_time` varchar(255) DEFAULT NULL,
@@ -7094,6 +7105,7 @@ CREATE TABLE `glpi_tickets` (
   `date` timestamp NULL DEFAULT NULL,
   `closedate` timestamp NULL DEFAULT NULL,
   `solvedate` timestamp NULL DEFAULT NULL,
+  `takeintoaccountdate` timestamp NULL DEFAULT NULL,
   `date_mod` timestamp NULL DEFAULT NULL,
   `users_id_lastupdater` int unsigned NOT NULL DEFAULT '0',
   `status` int NOT NULL DEFAULT '1',
@@ -7139,6 +7151,7 @@ CREATE TABLE `glpi_tickets` (
   KEY `entities_id` (`entities_id`),
   KEY `users_id_recipient` (`users_id_recipient`),
   KEY `solvedate` (`solvedate`),
+  KEY `takeintoaccountdate` (`takeintoaccountdate`),
   KEY `urgency` (`urgency`),
   KEY `impact` (`impact`),
   KEY `global_validation` (`global_validation`),
@@ -7472,6 +7485,7 @@ CREATE TABLE `glpi_transfers` (
   `keep_disk` int NOT NULL DEFAULT '0',
   `keep_certificate` int NOT NULL DEFAULT '0',
   `clean_certificate` int NOT NULL DEFAULT '0',
+  `lock_updated_fields` int NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `name` (`name`),
   KEY `date_mod` (`date_mod`),
@@ -7613,6 +7627,7 @@ CREATE TABLE `glpi_users` (
   `default_dashboard_mini_ticket` varchar(100) DEFAULT NULL,
   `default_central_tab` tinyint DEFAULT '0',
   `nickname` varchar(255) DEFAULT NULL,
+  `timeline_action_btn_layout` tinyint DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unicityloginauth` (`name`,`authtype`,`auths_id`),
   KEY `firstname` (`firstname`),
@@ -8744,10 +8759,19 @@ CREATE TABLE `glpi_agents` (
   `useragent` varchar(255) DEFAULT NULL,
   `tag` varchar(255) DEFAULT NULL,
   `port` varchar(6) DEFAULT NULL,
+  `remote_addr` varchar(255) DEFAULT NULL,
   `threads_networkdiscovery` int NOT NULL DEFAULT '1' COMMENT 'Number of threads for Network discovery',
   `threads_networkinventory` int NOT NULL DEFAULT '1' COMMENT 'Number of threads for Network inventory',
   `timeout_networkdiscovery` int NOT NULL DEFAULT '0' COMMENT 'Network Discovery task timeout (disabled by default)',
   `timeout_networkinventory` int NOT NULL DEFAULT '0' COMMENT 'Network Inventory task timeout (disabled by default)',
+  `use_module_wake_on_lan` tinyint NOT NULL DEFAULT '0',
+  `use_module_computer_inventory` tinyint NOT NULL DEFAULT '0',
+  `use_module_esx_remote_inventory` tinyint NOT NULL DEFAULT '0',
+  `use_module_remote_inventory` tinyint NOT NULL DEFAULT '0',
+  `use_module_network_inventory` tinyint NOT NULL DEFAULT '0',
+  `use_module_network_discovery` tinyint NOT NULL DEFAULT '0',
+  `use_module_package_deployment` tinyint NOT NULL DEFAULT '0',
+  `use_module_collect_data` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `deviceid` (`deviceid`),
   KEY `name` (`name`),
@@ -8781,10 +8805,12 @@ CREATE TABLE `glpi_lockedfields` (
   `value` varchar(255) DEFAULT NULL,
   `date_mod` timestamp NULL DEFAULT NULL,
   `date_creation` timestamp NULL DEFAULT NULL,
+  `is_global` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `unicity` (`itemtype`,`items_id`,`field`),
   KEY `date_mod` (`date_mod`),
-  KEY `date_creation` (`date_creation`)
+  KEY `date_creation` (`date_creation`),
+  KEY `is_global` (`is_global`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;
 
 DROP TABLE IF EXISTS `glpi_unmanageds`;
@@ -8997,8 +9023,10 @@ CREATE TABLE `glpi_items_remotemanagements` (
   `remoteid` varchar(255) DEFAULT NULL,
   `type` varchar(255) DEFAULT NULL,
   `is_dynamic` tinyint NOT NULL DEFAULT '0',
+  `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `is_dynamic` (`is_dynamic`),
+  KEY `is_deleted` (`is_deleted`),
   KEY `item` (`itemtype`,`items_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;
 

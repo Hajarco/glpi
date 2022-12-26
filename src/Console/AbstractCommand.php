@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,24 +17,25 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace Glpi\Console;
 
-use DB;
+use DBmysql;
 use Glpi\Console\Command\GlpiCommandInterface;
 use Glpi\System\RequirementsManager;
 use Symfony\Component\Console\Command\Command;
@@ -46,7 +48,7 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 abstract class AbstractCommand extends Command implements GlpiCommandInterface
 {
     /**
-     * @var DB
+     * @var DBmysql
      */
     protected $db;
 
@@ -74,6 +76,13 @@ abstract class AbstractCommand extends Command implements GlpiCommandInterface
      */
     protected $requires_db_up_to_date = true;
 
+    /**
+     * Current progress bar.
+     *
+     * @var ProgressBar
+     */
+    protected $progress_bar;
+
     protected function initialize(InputInterface $input, OutputInterface $output)
     {
 
@@ -95,7 +104,7 @@ abstract class AbstractCommand extends Command implements GlpiCommandInterface
 
         global $DB;
 
-        if ($this->requires_db && (!($DB instanceof DB) || !$DB->connected)) {
+        if ($this->requires_db && (!($DB instanceof DBmysql) || !$DB->connected)) {
             throw new \Symfony\Component\Console\Exception\RuntimeException(__('Unable to connect to database.'));
         }
 
@@ -192,7 +201,7 @@ abstract class AbstractCommand extends Command implements GlpiCommandInterface
 
         $requirements_manager = new RequirementsManager();
         $core_requirements = $requirements_manager->getCoreRequirementList(
-            $db instanceof \DBmysql && $db->connected ? $db : null
+            $db instanceof DBmysql && $db->connected ? $db : null
         );
         if ($core_requirements->hasMissingOptionalRequirements()) {
             $message = __('Some optional system requirements are missing.')
@@ -248,5 +257,94 @@ abstract class AbstractCommand extends Command implements GlpiCommandInterface
                 0 // Success code
             );
         }
+    }
+
+    /**
+     * Tell user that execution time can be long.
+     *
+     * @return void
+     */
+    protected function warnAboutExecutionTime(): void
+    {
+        $this->output->writeln(
+            '<comment>' . __('Command execution may take a long time and should not be interrupted.') . '</comment>',
+            OutputInterface::VERBOSITY_QUIET
+        );
+    }
+
+    /**
+     * Iterate on given iterable and display a progress bar (unless on quiet mode).
+     * Progress bar message can be customized.
+     *
+     * @param iterable $iterable
+     * @param callable $message_callback
+     *
+     * @return iterable
+     */
+    final protected function iterate(iterable $iterable, ?callable $message_callback = null): iterable
+    {
+        // Redefine formats
+        $formats = [
+            ProgressBar::FORMAT_NORMAL,
+            ProgressBar::FORMAT_NORMAL . '_nomax',
+            ProgressBar::FORMAT_VERBOSE,
+            ProgressBar::FORMAT_VERBOSE . '_nomax',
+            ProgressBar::FORMAT_VERY_VERBOSE,
+            ProgressBar::FORMAT_VERY_VERBOSE . '_nomax',
+            ProgressBar::FORMAT_DEBUG,
+            ProgressBar::FORMAT_DEBUG . '_nomax',
+        ];
+        $original_formats_definitions = [];
+        if (is_callable($message_callback)) {
+            foreach ($formats as $format) {
+                $original_formats_definitions[$format] = ProgressBar::getFormatDefinition($format);
+                // Put message directly in progress bar template
+                ProgressBar::setFormatDefinition(
+                    $format,
+                    $original_formats_definitions[$format] . PHP_EOL . ' <comment>%message%</comment>' . PHP_EOL
+                );
+            }
+        }
+
+        // Init progress bar
+        $this->progress_bar = new ProgressBar($this->output);
+        $this->progress_bar->setMessage(''); // Empty message on iteration start
+        $this->progress_bar->start(is_countable($iterable) ? \count($iterable) : 0);
+
+        // Iterate on items
+        foreach ($iterable as $key => $value) {
+            if (is_callable($message_callback)) {
+                $this->progress_bar->setMessage($message_callback($value));
+                $this->progress_bar->display();
+            }
+
+            yield $key => $value;
+
+            $this->progress_bar->advance();
+        }
+
+        // Finish progress bar
+        $this->progress_bar->setMessage(''); // Remove last message
+        $this->progress_bar->finish();
+        $this->progress_bar = null;
+
+        // Restore formats
+        if (is_callable($message_callback)) {
+            foreach ($formats as $format) {
+                ProgressBar::setFormatDefinition($format, $original_formats_definitions[$format]);
+            }
+        }
+    }
+
+    /**
+     * Output a message.
+     * This method handles displaying of messages in the middle of progress bar iteration.
+     *
+     * @param string $message
+     * @param int $verbosity
+     */
+    final protected function outputMessage(string $message, int $verbosity = OutputInterface::VERBOSITY_NORMAL): void
+    {
+        $this->writelnOutputWithProgressBar($message, $this->progress_bar, $verbosity);
     }
 }

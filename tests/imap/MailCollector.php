@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -584,7 +586,7 @@ class MailCollector extends DbTestCase
         $this->doConnect();
         $this->collector->maxfetch_emails = 1000; // Be sure to fetch all mails from test suite
 
-        $expected_errors = [
+        $expected_logged_errors = [
             // 05-empty-from.eml
             'The input is not a valid email address. Use the basic format local-part@hostname' => LogLevel::CRITICAL,
             // 17-malformed-email.eml
@@ -594,12 +596,20 @@ class MailCollector extends DbTestCase
         $msg = null;
         $this->output(
             function () use (&$msg) {
-                $msg = $this->collector->collect($this->mailgate_id);
+                $this->when(
+                    function () use (&$msg) {
+                        $msg = $this->collector->collect($this->mailgate_id);
+                    }
+                )
+                ->error()
+                    ->withType(E_USER_WARNING)
+                    ->withMessage('Invalid header "X-Invalid-Encoding"')
+                    ->exists();
             }
-        )->matches('/^(.*\n){' . count($expected_errors) . '}$/'); // Ensure that output has same count of lines than expected error count
+        )->matches('/^(.*\n){' . count($expected_logged_errors) . '}$/'); // Ensure that output has same count of lines than expected error count
 
         // Check error log and clean it (to prevent test failure, see GLPITestCase::afterTestMethod()).
-        foreach ($expected_errors as $error_message => $error_level) {
+        foreach ($expected_logged_errors as $error_message => $error_level) {
             $this->hasPhpLogRecordThatContains($error_message, $error_level);
         }
 
@@ -694,6 +704,13 @@ class MailCollector extends DbTestCase
                     '26 Illegal char in body',
                     '28 Multiple attachments no extension',
                     '30 - &#60;GLPI&#62; Special &#38; chars',
+                    '31 - HTML message without body',
+                    '32 - HTML message with attributes on body tag',
+                    '33 - HTML message with unwanted tags inside body tag',
+                    '34 - Message with no MessageID header',
+                    '35 - Message with some invalid headers',
+                    '36 - Microsoft specific code',
+                    '37 - Image using application/octet-steam content-type',
                 ]
             ],
          // Mails having "normal" user as observer (add_cc_to_observer = true)
@@ -720,25 +737,70 @@ Best regards,
 PLAINTEXT,
          // HTML on multi-part email
             'Re: [GLPI #0038927] Update - Issues with new Windows 10 machine' => <<<HTML
-<html>
-<body>
 <p>This message have reply to header, requester should be get from this header.</p>
-</body>
-</html>
 HTML,
             'Mono-part HTML message' => <<<HTML
-<html>
-<body>
 <p>This HTML message does not use <strong>"multipart/alternative"</strong> format.</p>
-</body>
-</html>
 HTML,
             '26 Illegal char in body' => <<<PLAINTEXT
 这是很坏的Minus C Blabla
 PLAINTEXT,
             '28 Multiple attachments no extension' => <<<HTML
-
-<HTML><BODY><div>&nbsp;</div><div>Test</div><div>&nbsp;</div></BODY></HTML>
+<div>&nbsp;</div><div>Test</div><div>&nbsp;</div>
+HTML,
+            '31 - HTML message without body' => <<<HTML
+This HTML message does not have a <i>body</i> tag.
+HTML,
+            '32 - HTML message with attributes on body tag' => <<<HTML
+This HTML message has an attribut on its <i>body</i> tag.
+HTML,
+            '33 - HTML message with unwanted tags inside body tag' => <<<HTML
+<p>This HTML message constains style, scripts and meta tags.</p>
+    
+    <p>It also contains text,</p>
+    
+    <p>between</p>
+    
+    <p>these unwanted</p>
+    
+    <p>tags.</p>
+HTML,
+            '35 - Message with some invalid headers' => <<<PLAINTEXT
+This message has some invalid headers, but it should collected anyways.
+PLAINTEXT,
+            '36 - Microsoft specific code' => <<<HTML
+<div class=WordSection1>
+      <p class=MsoNormal>
+        <span style='font-family:Roboto'>First Line</span>
+      </p>
+      <p class=MsoNormal>
+        <span style='font-family:Roboto'></span>
+      </p>
+      <p class=MsoListParagraph style='text-indent:-18.0pt;mso-list:l0 level1 lfo1'>
+        <span style='font-family:Roboto'><span style='mso-list:Ignore'>-<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span>
+        <span style='font-family:Roboto'>First hyphen</span>
+      </p>
+      <p class=MsoListParagraph style='text-indent:-18.0pt;mso-list:l0 level1 lfo1'>
+        <span style='font-family:Roboto'><span style='mso-list:Ignore'>-<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span>
+        <span style='font-family:Roboto'>Second hyphen</span>
+      </p>
+      <p class=MsoListParagraph style='text-indent:-18.0pt;mso-list:l0 level1 lfo1'>
+        <span style='font-family:Roboto'><span style='mso-list:Ignore'>-<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span>
+        <span style='font-family:Roboto'>Third hyphen</span>
+      </p>
+      <p class=MsoListParagraph style='margin-left:72.0pt;text-indent:-18.0pt;mso-list:l0 level2 lfo1'>
+        <span style='font-family:"Courier New"'><span style='mso-list:Ignore'>o<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp; </span></span></span>
+        <span style='font-family:Roboto'>Next tab hyphen</span>
+      </p>
+      <p class=MsoListParagraph style='margin-left:108.0pt;text-indent:-18.0pt;mso-list:l0 level3 lfo1'>
+        <span style='font-family:Wingdings'><span style='mso-list:Ignore'>▪<span style='font:7.0pt "Times New Roman"'>&nbsp; </span></span></span>
+        <span style='font-family:Roboto'>Next next tab hypen</span>
+      </p>
+      <p class=MsoNormal>
+        <span style='font-family:Roboto'></span>
+      </p>
+      
+    </div>
 HTML,
         ];
 
@@ -780,25 +842,26 @@ HTML,
 
        // Check creation of expected documents
         $expected_docs = [
-            '00-logoteclib.png',
+            '00-logoteclib.png' => 'image/png',
          // Space is missing between "France" and "très" due to a bug in laminas-mail
-            '01-screenshot-2018-4-12-observatoire-francetres-haut-debit.png',
-            '01-test.JPG',
-            '15-image001.png',
-            '18-blank.gif',
-            '19-secl-chas.gif',
-            '20-special-chars.gif',
-            '24.1-zhang-wen-jian-ming-jiang-dao-zhi-nei-rong-chu-zhi-biao-tou-zhong-de-lian-xu-xing.txt',
-            '24.2-zhong-guo-zi-fu.txt',
-            '25-new-text-document.txt',
-            '1234567890',
-            '1234567890_2',
-            '1234567890_3',
+            '01-screenshot-2018-4-12-observatoire-francetres-haut-debit.png' => 'image/png',
+            '01-test.JPG' => 'image/jpeg',
+            '15-image001.png' => 'image/png',
+            '18-blank.gif' => 'image/gif',
+            '19-secl-chas.gif' => 'image/gif',
+            '20-special-chars.gif' => 'image/gif',
+            '24.1-zhang-wen-jian-ming-jiang-dao-zhi-nei-rong-chu-zhi-biao-tou-zhong-de-lian-xu-xing.txt' => 'text/plain',
+            '24.2-zhong-guo-zi-fu.txt' => 'text/plain',
+            '25-new-text-document.txt' => 'text/plain',
+            '1234567890' => 'text/plain',
+            '1234567890_2' => 'text/plain',
+            '1234567890_3' => 'text/plain',
+            '37-red-dot.png' => 'image/png',
         ];
 
         $iterator = $DB->request(
             [
-                'SELECT' => ['d.filename'],
+                'SELECT' => ['d.filename', 'd.mime'],
                 'FROM'   => \Document::getTable() . " AS d",
                 'INNER JOIN'   => [
                     \Document_Item::getTable() . " AS d_item"  => [
@@ -819,7 +882,7 @@ HTML,
 
         $filenames = [];
         foreach ($iterator as $data) {
-            $filenames[] = $data['filename'];
+            $filenames[$data['filename']] = $data['mime'];
         }
         $this->array($filenames)->isIdenticalTo($expected_docs);
 

@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -46,10 +48,6 @@ class Item_SoftwareVersion extends CommonDBRelation
     public static $log_history_2_add    = Log::HISTORY_INSTALL_SOFTWARE;
     public static $log_history_2_delete = Log::HISTORY_UNINSTALL_SOFTWARE;
 
-    public function useDeletedToLockIfDynamic()
-    {
-        return false;
-    }
 
     public static function getTypeName($nb = 0)
     {
@@ -464,8 +462,9 @@ class Item_SoftwareVersion extends CommonDBRelation
         $canshowitems  = [];
         $item_version_table = self::getTable(__CLASS__);
 
-        $refcolumns = ['vername'           => _n('Version', 'Versions', Session::getPluralNumber()),
-            'item_type'          => __('Item type'),
+        $refcolumns = [
+            'version'           => _n('Version', 'Versions', Session::getPluralNumber()),
+            'item_type'         => __('Item type'),
             'itemname'          => __('Name'),
             'entity'            => Entity::getTypeName(1),
             'serial'            => __('Serial number'),
@@ -478,7 +477,7 @@ class Item_SoftwareVersion extends CommonDBRelation
             'date_install'      => __('Installation date')
         ];
         if ($crit != "softwares_id") {
-            unset($refcolumns['vername']);
+            unset($refcolumns['version']);
         }
 
         if (isset($_GET["start"])) {
@@ -747,9 +746,11 @@ class Item_SoftwareVersion extends CommonDBRelation
                 if ($key[0] == '_') {
                     $header_end .= "<th>$val</th>";
                 } else {
-                    $header_end .= "<th" . ($sort == "`$key`" ? " class='order_$order'" : '') . ">" .
-                     "<a href='javascript:reloadTab(\"sort=$key&amp;order=" .
-                        (($order == "ASC") ? "DESC" : "ASC") . "&amp;start=0\");'>$val</a></th>";
+                    $header_end .= "<th" . ($sort == "`$key`" ? " class='order_$order'" : '') . ">";
+                    $header_end .= $key !== 'lname'
+                        ? "<a href='javascript:reloadTab(\"sort=$key&amp;order=" . (($order == "ASC") ? "DESC" : "ASC") . "&amp;start=0\");'>$val</a>"
+                        : $val;
+                    $header_end .= "</th>";
                 }
             }
 
@@ -1219,6 +1220,7 @@ class Item_SoftwareVersion extends CommonDBRelation
             echo "</tfoot>";
             echo "</table>";
             echo "</div>";
+            Html::printAjaxPager('', $start, $number);
             if ($canedit) {
                 $massiveactionparams['ontop'] = false;
                 Html::showMassiveActions($massiveactionparams);

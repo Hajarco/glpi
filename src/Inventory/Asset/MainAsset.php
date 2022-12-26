@@ -2,13 +2,15 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2010-2022 by the FusionInventory Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,33 +18,41 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace Glpi\Inventory\Asset;
 
 use Auth;
+use AutoUpdateSystem;
+use Blacklist;
 use CommonDBTM;
 use Dropdown;
+use Glpi\Inventory\Asset\Printer as AssetPrinter;
 use Glpi\Inventory\Conf;
 use Glpi\Inventory\Request;
+use Glpi\Toolbox\Sanitizer;
+use NetworkEquipment;
+use Printer;
 use RefusedEquipment;
 use RuleImportAssetCollection;
 use RuleImportEntityCollection;
+use RuleLocationCollection;
 use RuleMatchedLog;
-use Toolbox;
+use stdClass;
 use Transfer;
 
 abstract class MainAsset extends InventoryAsset
@@ -84,7 +94,7 @@ abstract class MainAsset extends InventoryAsset
         $namespaced = explode('\\', static::class);
         $this->itemtype = array_pop($namespaced);
         $this->item = $item;
-       //store raw data for reference
+        //store raw data for reference
         $this->raw_data = $data;
     }
 
@@ -117,9 +127,20 @@ abstract class MainAsset extends InventoryAsset
 
             $val = new \stdClass();
 
-           //set update system
-            $val->autoupdatesystems_id = $entry->content->autoupdatesystems_id ?? 'GLPI Native Inventory';
+            //set update system
+            $val->autoupdatesystems_id = $entry->content->autoupdatesystems_id ?? AutoUpdateSystem::NATIVE_INVENTORY;
             $val->last_inventory_update = $_SESSION["glpi_currenttime"];
+            $val->is_deleted = 0;
+
+            //try to get "last_boot" only available from "operatingsystem->boot_time" node
+            if (
+                $this->raw_data instanceof stdClass
+                && property_exists($this->raw_data, 'content')
+                && property_exists($this->raw_data->content, 'operatingsystem')
+                && property_exists($this->raw_data->content->operatingsystem, 'boot_time')
+            ) {
+                $val->last_boot = $entry->content->operatingsystem->boot_time;
+            }
 
             if (isset($this->extra_data['hardware'])) {
                 $this->prepareForHardware($val);
@@ -171,7 +192,7 @@ abstract class MainAsset extends InventoryAsset
             $val->$key = $property;
         }
 
-       // * Type of the asset
+        // * Type of the asset
         if (isset($hardware)) {
             $types_id = $this->getTypesFieldName();
             if (
@@ -180,7 +201,7 @@ abstract class MainAsset extends InventoryAsset
                 && $hardware->vmsystem != 'Physical'
             ) {
                 $val->$types_id = $hardware->vmsystem;
-               // HACK FOR BSDJail, remove serial and UUID (because it's of host, not container)
+                // HACK FOR BSDJail, remove serial and UUID (because it's of host, not container)
                 if ($hardware->vmsystem == 'BSDJail') {
                     if (property_exists($val, 'serial')) {
                         $val->serial = '';
@@ -249,7 +270,7 @@ abstract class MainAsset extends InventoryAsset
             }
         }
 
-       // * USERS
+        // * USERS
         $cnt = 0;
         if (isset($this->extra_data['users'])) {
             if (count($this->extra_data['users']) > 0) {
@@ -319,7 +340,7 @@ abstract class MainAsset extends InventoryAsset
                 $cnt++;
             }
             if (empty($val->contact)) {
-                $val->contact = $user_temp;
+                $val->contact = $user_temp ?? '';
             }
         }
     }
@@ -352,7 +373,7 @@ abstract class MainAsset extends InventoryAsset
 
         if (property_exists($bios, 'ssn')) {
             $val->serial = trim($bios->ssn);
-           // HP patch for serial begin with 'S'
+            // HP patch for serial begin with 'S'
             if (
                 property_exists($val, 'manufacturers_id')
                 && strstr($val->manufacturers_id, "ewlett")
@@ -386,6 +407,10 @@ abstract class MainAsset extends InventoryAsset
 
         if (isset($this->getAgent()->fields['tag'])) {
             $input['tag'] = $this->getAgent()->fields['tag'];
+        }
+
+        if (isset($this->getAgent()->fields['deviceid'])) {
+            $input['deviceid'] = $this->getAgent()->fields['deviceid'];
         }
 
         $models_id = $this->getModelsFieldName();
@@ -434,7 +459,7 @@ abstract class MainAsset extends InventoryAsset
                     }
                 }
 
-               // Case of virtualmachines
+                // Case of virtualmachines
                 if (
                     !isset($input['mac'])
                      && !isset($input['ip'])
@@ -458,7 +483,7 @@ abstract class MainAsset extends InventoryAsset
 
         $input['itemtype'] = $this->item->getType();
 
-       // * entity rules
+        // * entity rules
         $input['entities_id'] = $this->entities_id;
 
         return $input;
@@ -487,7 +512,11 @@ abstract class MainAsset extends InventoryAsset
 
     public function handle()
     {
+        $blacklist = new Blacklist();
+
         foreach ($this->data as $key => $data) {
+            $blacklist->processBlackList($data);
+
             $this->current_key = $key;
             $input = $this->prepareAllRulesInput($data);
 
@@ -505,11 +534,32 @@ abstract class MainAsset extends InventoryAsset
                 }
 
                 if (!isset($dataEntity['entities_id']) || $dataEntity['entities_id'] == -1) {
-                    $input['entities_id'] = 0;
+                    $input['entities_id'] = $this->conf->entities_id_default ?? 0; //use default entity
                 } else {
                     $input['entities_id'] = $dataEntity['entities_id'];
                 }
                 $this->entities_id = $input['entities_id'];
+
+                // get data from rules (like locations_id, states_id, groups_id_tech, etc)
+                // we don't want virtual action (prefixed by _)
+                $ruleentity_actions = $ruleEntity->getRuleClass()->getAllActions();
+                foreach ($ruleentity_actions as $action_key => $action_data) {
+                    if (
+                        $action_key[0] !== '_'
+                        && $action_key !== "entities_id"
+                        && isset($dataEntity[$action_key])
+                    ) {
+                        $this->ruleentity_data[$action_key] = $dataEntity[$action_key];
+                    }
+                }
+
+                $ruleLocation = new RuleLocationCollection();
+                $ruleLocation->getCollectionPart();
+                $dataLocation = $ruleLocation->processAllRules($input, []);
+
+                if (isset($dataLocation['locations_id']) && $dataLocation['locations_id'] != -1) {
+                    $this->rulelocation_data['locations_id'] = $dataLocation['locations_id'];
+                }
             }
 
             //call rules on current collected data to find item
@@ -554,16 +604,24 @@ abstract class MainAsset extends InventoryAsset
         }
 
         if (!is_numeric($input['autoupdatesystems_id'])) {
-            $input['autoupdatesystems_id'] = Dropdown::importExternal(
-                getItemtypeForForeignKeyField('autoupdatesystems_id'),
-                addslashes($input['autoupdatesystems_id']),
-                $input['entities_id']
-            );
+            $system_name = Sanitizer::sanitize($input['autoupdatesystems_id']);
+            $auto_update_system = new AutoUpdateSystem();
+            if ($auto_update_system->getFromDBByCrit(['name' => $system_name])) {
+                // Load from DB
+                $input['autoupdatesystems_id'] = $auto_update_system->getID();
+            } else {
+                // Import
+                $input['autoupdatesystems_id'] = Dropdown::importExternal(
+                    getItemtypeForForeignKeyField('autoupdatesystems_id'),
+                    $system_name,
+                    $input['entities_id']
+                );
+            }
         }
         $refused_input['autoupdatesystems_id'] = $input['autoupdatesystems_id'];
 
         $refused = new \RefusedEquipment();
-        $refused->add(Toolbox::addslashes_deep($refused_input));
+        $refused->add(Sanitizer::sanitize($refused_input));
         $this->refused[] = $refused;
     }
 
@@ -591,9 +649,24 @@ abstract class MainAsset extends InventoryAsset
         $entities_id = $this->entities_id;
         $val->is_dynamic = 1;
         $val->entities_id = $entities_id;
+        $default_states_id = $this->states_id_default ?? 0;
+        if ($items_id != 0 && $default_states_id != '-1') {
+            $val->states_id = $default_states_id;
+        } elseif ($items_id == 0) {
+            //if create mode default states_id can't be '-1' put 0 if needed
+            $val->states_id = $default_states_id > 0 ? $default_states_id : 0;
+        }
 
-        $val->states_id = $this->states_id_default ?? $this->item->fields['states_id'] ?? 0;
-        $val->locations_id = $this->locations_id ?? $val->locations_id ?? $this->item->fields['locations_id'] ?? 0;
+        // append data from RuleImportEntity
+        foreach ($this->ruleentity_data as $attribute => $value) {
+            $val->{$attribute} = $value;
+        }
+        // append data from RuleLocation
+        foreach ($this->rulelocation_data as $attribute => $value) {
+            $known_key = md5($attribute . $value);
+            $this->known_links[$known_key] = $value;
+            $val->{$attribute} = $value;
+        }
 
         $orig_glpiactive_entity = $_SESSION['glpiactive_entity'] ?? null;
         $orig_glpiactiveentities = $_SESSION['glpiactiveentities'] ?? null;
@@ -604,22 +677,19 @@ abstract class MainAsset extends InventoryAsset
         $_SESSION['glpiactiveentities_string'] = $entities_id;
         $_SESSION['glpiactive_entity']         = $entities_id;
 
+        if ($items_id != 0) {
+            $this->item->getFromDB($items_id);
+        }
+
         //handleLinks relies on $this->data; update it before the call
         $this->handleLinks();
 
         if ($items_id == 0) {
-            $input = (array)$val;
+            $input = $this->handleInput($val, $this->item);
             unset($input['ap_port']);
             unset($input['firmware']);
-            $items_id = $this->item->add(Toolbox::addslashes_deep($input));
+            $items_id = $this->item->add(Sanitizer::sanitize($input));
             $this->setNew();
-        } else {
-            if ($this->is_discovery === true) {
-                //do not update from network discoveries
-                //prevents discoveries to remove all ports, IPs and so on found with network inventory
-                return;
-            }
-            $this->item->getFromDB($items_id);
         }
 
         if (in_array($itemtype, $CFG_GLPI['agent_types'])) {
@@ -628,7 +698,6 @@ abstract class MainAsset extends InventoryAsset
             $this->agent->fields['items_id'] = $items_id;
             $this->agent->fields['entities_id'] = $entities_id;
         }
-
 
         //check for any old agent to remove
         $agent = new \Agent();
@@ -654,12 +723,38 @@ abstract class MainAsset extends InventoryAsset
             if ($doTransfer > 0 && $transfer->getFromDB($doTransfer)) {
                 $item_to_transfer = [$this->itemtype => [$items_id => $items_id]];
                 $transfer->moveItems($item_to_transfer, $entities_id, $transfer->fields);
+                //and set new entity in session
+                $_SESSION['glpiactiveentities']        = [$entities_id];
+                $_SESSION['glpiactiveentities_string'] = $entities_id;
+                $_SESSION['glpiactive_entity']         = $entities_id;
+            } else {
+                //no transfert so revert to old entities_id
+                $val->entities_id = $this->item->fields['entities_id'];
             }
+        }
 
-            //and set new entity in session
-            $_SESSION['glpiactiveentities']        = [$entities_id];
-            $_SESSION['glpiactiveentities_string'] = $entities_id;
-            $_SESSION['glpiactive_entity']         = $entities_id;
+        if ($this->is_discovery === true && !$this->isNew()) {
+            //if NetworkEquipement
+            //Or printer that has not changed its IP
+            //do not update to prevents discoveries to remove all ports, IPs and so on found with network inventory
+            if (
+                $itemtype == NetworkEquipment::getType()
+                ||
+                (
+                $itemtype == Printer::getType()
+                && !AssetPrinter::needToBeUpdatedFromDiscovery($this->item, $val)
+                )
+            ) {
+                //only update autoupdatesystems_id, last_inventory_update, snmpcredentials_id
+                $input = $this->handleInput($val, $this->item);
+                $this->item->update(Sanitizer::sanitize(['id' => $input['id'],
+                    'autoupdatesystems_id'  => $input['autoupdatesystems_id'],
+                    'last_inventory_update' => $input['last_inventory_update'],
+                    'snmpcredentials_id'    => $input['snmpcredentials_id'],
+                    'is_dynamic'            => true
+                ]));
+                return;
+            }
         }
 
         //Ports are handled a different way on network equipments
@@ -672,7 +767,6 @@ abstract class MainAsset extends InventoryAsset
                 $fw = new Firmware($this->item, [$val->firmware]);
                 if ($fw->checkConf($this->conf)) {
                     $fw->setAgent($this->getAgent());
-                    $fw->setEntityID($this->getEntityID());
                     $fw->prepare();
                     $fw->handleLinks();
                     $this->assets['Glpi\Inventory\Asset\Firmware'] = [$fw];
@@ -680,14 +774,14 @@ abstract class MainAsset extends InventoryAsset
                 }
             }
 
-            if (property_exists($val, 'ap_port')) {
+            if (property_exists($val, 'ap_port') && method_exists($this, 'setManagementPorts')) {
                 $this->setManagementPorts(['management' => $val->ap_port]);
                 unset($val->ap_port);
             }
         }
 
-        $input = (array)$val;
-        $this->item->update(Toolbox::addslashes_deep($input));
+        $input = $this->handleInput($val, $this->item);
+        $this->item->update(Sanitizer::sanitize($input));
 
         if (!($this->item instanceof RefusedEquipment)) {
             $this->handleAssets();
@@ -757,8 +851,8 @@ abstract class MainAsset extends InventoryAsset
         $controllers = [];
         $ignored_controllers = [];
 
-       //ensure controllers are done last, some components will
-       //ask to ignore their associated controller
+        //ensure controllers are done last, some components will
+        //ask to ignore their associated controller
         if (isset($assets_list['\Glpi\Inventory\Asset\Controller'])) {
             $controllers = $assets_list['\Glpi\Inventory\Asset\Controller'];
             unset($assets_list['\Glpi\Inventory\Asset\Controller']);
@@ -766,6 +860,7 @@ abstract class MainAsset extends InventoryAsset
 
         foreach ($assets_list as $assets) {
             foreach ($assets as $asset) {
+                $asset->setEntityID($this->getEntityID());
                 $asset->setExtraData($this->assets);
                 $asset->setExtraData(['\\' . get_class($this) => $mainasset]);
                 $asset->handleLinks();
@@ -774,11 +869,12 @@ abstract class MainAsset extends InventoryAsset
             }
         }
 
-       //do controllers
+        //do controllers
         foreach ($controllers as $asset) {
+            $asset->setEntityID($this->getEntityID());
             $asset->setExtraData($this->assets);
             $asset->setExtraData(['\\' . get_class($this) => $mainasset]);
-           //do not handle ignored controllers
+            //do not handle ignored controllers
             $asset->setExtraData(['ignored' => $ignored_controllers]);
             $asset->handleLinks();
             $asset->handle();

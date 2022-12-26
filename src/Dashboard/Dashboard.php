@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -474,10 +476,14 @@ class Dashboard extends \CommonDBTM
         ];
         $rights = array_merge_recursive($default_rights, $rights);
 
+        if (!Session::getLoginUserID()) {
+            return false;
+        }
+
        // check specific rights
         if (
             count(array_intersect($rights['entities_id'], $_SESSION['glpiactiveentities']))
-            || count(array_intersect($rights['profiles_id'], array_keys($_SESSION['glpiprofiles'])))
+            || in_array($_SESSION["glpiactiveprofile"]['id'], $rights['profiles_id'])
             || in_array($_SESSION['glpiID'], $rights['users_id'])
             || count(array_intersect($rights['groups_id'], $_SESSION['glpigroups']))
         ) {
@@ -507,10 +513,10 @@ class Dashboard extends \CommonDBTM
     public static function importFromJson($import = null)
     {
         if (!is_array($import)) {
-            $import = json_decode($import, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
+            if (!\Toolbox::isJSON($import)) {
                 return false;
             }
+            $import = json_decode($import, true);
         }
 
         foreach ($import as $key => $dashboard) {
@@ -553,7 +559,9 @@ class Dashboard extends \CommonDBTM
      */
     public function isPrivate(): bool
     {
-        $this->load();
-        return ($this->fields['users_id'] > 0 && $this->fields['users_id'] != Session::getLoginUserID());
+        if ((bool)$this->getPrivate() === false) {
+            return false;
+        }
+        return $this->fields['users_id'] != Session::getLoginUserID();
     }
 }

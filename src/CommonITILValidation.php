@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -291,34 +293,17 @@ abstract class CommonITILValidation extends CommonDBChild
     {
         global $CFG_GLPI;
 
-
-        if (array_key_exists('comment_submission', $this->input)) {
-            // Add screenshots if needed, without notification
+        // Handle rich-text images
+        foreach (['comment_submission', 'comment_validation'] as $content_field) {
             $this->input = $this->addFiles($this->input, [
                 'force_update'  => true,
-                'name'          => 'filename',
-                'content_field' => 'comment_submission',
-            ]);
-            // Add documents if needed, without notification
-            $this->input = $this->addFiles($this->input, [
-                'force_update'  => true,
-                'name'          => 'comment_submission',
-                'content_field' => 'comment_submission',
-            ]);
-        } else {
-            // Add screenshots if needed, without notification
-            $this->input = $this->addFiles($this->input, [
-                'force_update'  => true,
-                'name'          => 'filename',
-                'content_field' => 'comment_validation',
-            ]);
-            // Add documents if needed, without notification
-            $this->input = $this->addFiles($this->input, [
-                'force_update'  => true,
-                'name'          => 'comment_validation',
-                'content_field' => 'comment_validation',
+                'name'          => $content_field,
+                'content_field' => $content_field,
             ]);
         }
+
+        // Handle uploaded documents
+        $this->input = $this->addFiles($this->input);
 
         $item     = new static::$itemtype();
         $mailsend = false;
@@ -329,8 +314,9 @@ abstract class CommonITILValidation extends CommonDBChild
                 || ($item->fields['global_validation'] == self::NONE)
             ) {
                 $input = [
-                    'id'                => $this->fields[static::$items_id],
-                    'global_validation' => self::WAITING,
+                    'id'                    => $this->fields[static::$items_id],
+                    'global_validation'     => self::WAITING,
+                    '_from_itilvalidation'  => true,
                 ];
 
                // to fix lastupdater
@@ -431,19 +417,17 @@ abstract class CommonITILValidation extends CommonDBChild
             $donotif = false;
         }
 
-       // Add screenshots if needed, without notification
-        $this->input = $this->addFiles($this->input, [
-            'force_update'  => true,
-            'name'          => 'comment_submission',
-            'content_field' => 'comment_submission',
-        ]);
+        // Handle rich-text images
+        foreach (['comment_submission', 'comment_validation'] as $content_field) {
+            $this->input = $this->addFiles($this->input, [
+                'force_update'  => true,
+                'name'          => $content_field,
+                'content_field' => $content_field,
+            ]);
+        }
 
-       // Add documents if needed, without notification
-        $this->input = $this->addFiles($this->input, [
-            'force_update'  => true,
-            'name'          => 'filename',
-            'content_field' => 'comment_validation',
-        ]);
+        // Handle uploaded documents
+        $this->input = $this->addFiles($this->input);
 
         if ($item->getFromDB($this->fields[static::$items_id])) {
             if (
@@ -459,8 +443,9 @@ abstract class CommonITILValidation extends CommonDBChild
             //if status is updated, update global approval status
             if (in_array("status", $this->updates)) {
                 $input = [
-                    'id'                => $this->fields[static::$items_id],
-                    'global_validation' => self::computeValidationStatus($item),
+                    'id'                    => $this->fields[static::$items_id],
+                    'global_validation'     => self::computeValidationStatus($item),
+                    '_from_itilvalidation'  => true,
                 ];
                 $item->update($input);
             }
@@ -475,8 +460,9 @@ abstract class CommonITILValidation extends CommonDBChild
         if ($item->getFromDB($this->fields[static::$items_id])) {
             if (($item->fields['global_validation'] == self::WAITING)) {
                 $input = [
-                    'id'                => $this->fields[static::$items_id],
-                    'global_validation' => self::NONE,
+                    'id'                    => $this->fields[static::$items_id],
+                    'global_validation'     => self::NONE,
+                    '_from_itilvalidation'  => true,
                 ];
                 $item->update($input);
             }
@@ -1072,7 +1058,8 @@ abstract class CommonITILValidation extends CommonDBChild
 
         TemplateRenderer::getInstance()->display('components/itilobject/timeline/form_validation.html.twig', [
             'item'      => $options['parent'],
-            'subitem'   => $this
+            'subitem'   => $this,
+            'scroll'    => true,
         ]);
 
         return true;

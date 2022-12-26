@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -362,7 +364,7 @@ class DatabasesPluginToCoreCommand extends AbstractPluginToCoreCommand
                     sprintf(
                         __('Unable to find target item for %s #%s.'),
                         'PluginDatabasesDatabase',
-                        $database_data['plugin_domains_domains_id']
+                        $database_data['plugin_databases_databases_id']
                     ),
                     $progress_bar,
                     true // Do not block migration as this error is probably resulting in presence of obsolete data in DB
@@ -393,7 +395,7 @@ class DatabasesPluginToCoreCommand extends AbstractPluginToCoreCommand
                     sprintf(
                         __('Unable to find target item for %s #%s.'),
                         'PluginDatabasesDatabase',
-                        $database_data['plugin_domains_domains_id']
+                        $database_data['plugin_databases_databases_id']
                     ),
                     $progress_bar,
                     true // Do not block migration as this error is probably resulting in presence of obsolete data in DB
@@ -470,7 +472,7 @@ class DatabasesPluginToCoreCommand extends AbstractPluginToCoreCommand
                     sprintf(
                         __('Unable to find target item for %s #%s.'),
                         'PluginDatabasesDatabaseType',
-                        $instance_data['plugin_domains_domains_id']
+                        $instance_data['plugin_databases_databasetypes_id']
                     ),
                     $progress_bar,
                     true // Do not block migration as this error is probably resulting in presence of obsolete data in DB
@@ -490,28 +492,56 @@ class DatabasesPluginToCoreCommand extends AbstractPluginToCoreCommand
                 );
             }
 
+            $databaseinstance_data = [
+                'entities_id'                   => $instance_data['entities_id'],
+                'is_recursive'                  => $instance_data['is_recursive'],
+                'name'                          => $instance_data['name'],
+                'is_deleted'                    => $instance_data['is_deleted'],
+                'is_active'                     => 1,
+                'databaseinstancetypes_id'      => $mapped_type !== null ? $mapped_type->getID() : 0,
+                'databaseinstancecategories_id' => $mapped_category !== null ? $mapped_category->getID() : 0,
+                'comment'                       => $instance_data['comment'],
+                'locations_id'                  => $instance_data['locations_id'],
+                'manufacturers_id'              => $instance_data['manufacturers_id'],
+                'users_id_tech'                 => $instance_data['users_id'],
+                'groups_id_tech'                => $instance_data['groups_id'],
+                'date_mod'                      => $instance_data['date_mod'],
+                'is_helpdesk_visible'           => $instance_data['is_helpdesk_visible'],
+                'states_id'                     => 0,
+                'is_dynamic'                    => 0,
+            ];
+
+            //try to load related item from 'glpi_plugin_databases_databases_items'
+            $related_item_iterator = $this->db->request([
+                'FROM'  => 'glpi_plugin_databases_databases_items',
+                'WHERE' => [
+                    'plugin_databases_databases_id' => $instance_data['id'],
+                    'itemtype' => 'Computer'
+                ],
+            ]);
+
+            if ($related_item_iterator->count() === 1) {
+                if ($row = $related_item_iterator->current()) {
+                    $databaseinstance_data['itemtype'] = $row['itemtype'];
+                    $databaseinstance_data['items_id'] = $row['items_id'];
+                }
+            } else if ($related_item_iterator->count() > 1) {
+                $this->handleImportError(
+                    sprintf(
+                        __('More than one Computer linked to %s #%s.'),
+                        'PluginDatabasesDatabaseInstance',
+                        $instance_data['id']
+                    ),
+                    $progress_bar,
+                    true // Do not block migration as this error is probably resulting in presence of obsolete data in DB
+                );
+            }
+
             $instance = $this->storeItem(
                 DatabaseInstance::class,
                 $core_instance_id,
                 Toolbox::addslashes_deep(
-                    [
-                        'entities_id'                   => $instance_data['entities_id'],
-                        'is_recursive'                  => $instance_data['is_recursive'],
-                        'name'                          => $instance_data['name'],
-                        'is_deleted'                    => $instance_data['is_deleted'],
-                        'is_active'                     => 1,
-                        'databaseinstancetypes_id'      => $mapped_type !== null ? $mapped_type->getID() : 0,
-                        'databaseinstancecategories_id' => $mapped_category !== null ? $mapped_category->getID() : 0,
-                        'comment'                       => $instance_data['comment'],
-                        'locations_id'                  => $instance_data['locations_id'],
-                        'manufacturers_id'              => $instance_data['manufacturers_id'],
-                        'users_id_tech'                 => $instance_data['users_id'],
-                        'groups_id_tech'                => $instance_data['groups_id'],
-                        'date_mod'                      => $instance_data['date_mod'],
-                        'is_helpdesk_visible'           => $instance_data['is_helpdesk_visible'],
-                        'states_id'                     => 0,
-                        'is_dynamic'                    => 0,
-                    ]
+                    $databaseinstance_data
                 )
             );
 

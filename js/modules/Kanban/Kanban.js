@@ -1,12 +1,13 @@
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -14,23 +15,25 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 import SearchInput from "../SearchTokenizer/SearchInput.js";
 
+/* global escapeMarkupText */
 /* global sortable */
 /* global glpi_toast_error */
 
@@ -445,7 +448,9 @@ class GLPIKanbanRights {
             // Dropdown for single additions
             let add_itemtype_dropdown = "<ul id='kanban-add-dropdown' class='kanban-dropdown dropdown-menu' style='display: none'>";
             Object.keys(self.supported_itemtypes).forEach(function(itemtype) {
-                add_itemtype_dropdown += "<li id='kanban-add-" + itemtype + "' class='dropdown-item'><span>" + self.supported_itemtypes[itemtype]['name'] + '</span></li>';
+                if (self.supported_itemtypes[itemtype]['allow_create'] !== false) {
+                    add_itemtype_dropdown += "<li id='kanban-add-" + itemtype + "' class='dropdown-item'><span>" + self.supported_itemtypes[itemtype]['name'] + '</span></li>';
+                }
             });
             add_itemtype_dropdown += '</ul>';
             kanban_container.append(add_itemtype_dropdown);
@@ -454,7 +459,9 @@ class GLPIKanbanRights {
             let column_overflow_dropdown = "<ul id='kanban-overflow-dropdown' class='kanban-dropdown  dropdown-menu' style='display: none'>";
             let add_itemtype_bulk_dropdown = "<ul id='kanban-bulk-add-dropdown' class='dropdown-menu' style='display: none'>";
             Object.keys(self.supported_itemtypes).forEach(function(itemtype) {
-                add_itemtype_bulk_dropdown += "<li id='kanban-bulk-add-" + itemtype + "' class='dropdown-item'><span>" + self.supported_itemtypes[itemtype]['name'] + '</span></li>';
+                if (self.supported_itemtypes[itemtype]['allow_create'] !== false) {
+                    add_itemtype_bulk_dropdown += "<li id='kanban-bulk-add-" + itemtype + "' class='dropdown-item'><span>" + self.supported_itemtypes[itemtype]['name'] + '</span></li>';
+                }
             });
             add_itemtype_bulk_dropdown += '</ul>';
             const add_itemtype_bulk_link = '<a href="#">' + '<i class="fa-fw fas fa-list"></i>' + __('Bulk add') + '</a>';
@@ -473,6 +480,12 @@ class GLPIKanbanRights {
                <a href="#"><i class="fa-fw fas fa-share"></i>${__('Go to')}</a>
             </li>`;
             if (self.rights.canDeleteItem()) {
+                card_overflow_dropdown += `
+                <li class='kanban-item-restore dropdown-item d-none'>
+                   <span>
+                      <i class="fa-fw ti ti-trash-off"></i>${__('Restore')}
+                   </span>
+                </li>`;
                 card_overflow_dropdown += `
                 <li class='kanban-item-remove dropdown-item'>
                    <span>
@@ -520,7 +533,7 @@ class GLPIKanbanRights {
             $("<select name='kanban-board-switcher'></select>").appendTo(toolbar);
             let filter_input = $(`<input name='filter' class='form-control ms-1' type='text' placeholder="${__('Search or filter results')}" autocomplete="off"/>`).appendTo(toolbar);
             if (self.rights.canModifyView()) {
-                let add_column = "<buttom rome='button' class='kanban-add-column btn btn-outline-secondary ms-1'>" + __('Add column') + "</button>";
+                let add_column = "<button class='kanban-add-column btn btn-outline-secondary ms-1'>" + __('Add column') + "</button>";
                 toolbar.append(add_column);
             }
 
@@ -765,9 +778,12 @@ class GLPIKanbanRights {
                 $(card_overflow_dropdown.find('.kanban-item-goto a')).attr('href', form_link);
 
                 let delete_action = $(card_overflow_dropdown.find('.kanban-item-remove'));
-                if (card.hasClass('deleted')) {
+                const restore_action = $(card_overflow_dropdown.find('.kanban-item-restore'));
+                if (card.data('is_deleted')) {
+                    restore_action.removeClass('d-none');
                     delete_action.html('<span><i class="ti ti-trash"></i>'+__('Purge')+'</span>');
                 } else {
+                    restore_action.addClass('d-none');
                     delete_action.html('<span><i class="ti ti-trash"></i>'+__('Delete')+'</span>');
                 }
             });
@@ -813,6 +829,12 @@ class GLPIKanbanRights {
                 const card = $(e.target.closest('.kanban-dropdown')).data('trigger-button').closest('.kanban-item').prop('id');
                 // Try to delete that card item
                 deleteCard(card, undefined, undefined);
+            });
+            $(self.element + ' .kanban-container').on('click', '.kanban-item-restore', function(e) {
+                // Get root dropdown, then the button that triggered it, and finally the card that the button is in
+                const card = $(e.target.closest('.kanban-dropdown')).data('trigger-button').closest('.kanban-item').prop('id');
+                // Try to delete that card item
+                restoreCard(card, undefined, undefined);
             });
             $(self.element + ' .kanban-container').on('click', '.kanban-collapse-column', function(e) {
                 self.toggleCollapseColumn(e.target.closest('.kanban-column'));
@@ -960,13 +982,20 @@ class GLPIKanbanRights {
                     itemtype: form.prop('id').split('_')[2],
                     action: 'add_item'
                 };
+                const itemtype = form.attr('data-itemtype');
+                const column_el_id = form.closest('.kanban-column').attr('id');
 
                 $.ajax({
                     method: 'POST',
                     url: (self.ajax_root + "kanban.php"),
                     data: data
                 }).done(function() {
-                    self.refresh();
+                    // Close the form
+                    form.remove();
+                    self.refresh(undefined, undefined, () => {
+                        // Re-open form
+                        self.showAddItemForm($(`#${column_el_id}`), itemtype);
+                    });
                 });
             });
 
@@ -1061,7 +1090,7 @@ class GLPIKanbanRights {
 
             sortable(self.element + ' .kanban-body', {
                 acceptFrom: '.kanban-body',
-                items: '.kanban-item:not(.readonly):not(.temporarily-readonly)',
+                items: '.kanban-item:not(.readonly):not(.temporarily-readonly):not(.filtered-out)',
             });
 
             $(self.element + ' .kanban-body').off('sortstart');
@@ -1274,6 +1303,39 @@ class GLPIKanbanRights {
                     if (success) {
                         success();
                         $('#'+card).trigger('kanban:card_delete');
+                    }
+                }
+            });
+        };
+
+        /**
+         * Restore a trashed card
+         * @param {string} card The ID of the card being restored.
+         * @param {function} error Callback function called when the server reports an error.
+         * @param {function} success Callback function called when the server processes the request successfully.
+         */
+        const restoreCard = function(card, error, success) {
+            const [itemtype, items_id] = card.split('-', 2);
+            const card_obj = $('#'+card);
+            $.ajax({
+                type: "POST",
+                url: (self.ajax_root + "kanban.php"),
+                data: {
+                    action: "restore_item",
+                    itemtype: itemtype,
+                    items_id: items_id,
+                },
+                error: function() {
+                    if (error) {
+                        error();
+                    }
+                },
+                success: function() {
+                    card_obj.data('is_deleted', false);
+                    card_obj.removeClass('deleted');
+                    if (success) {
+                        success();
+                        $('#'+card).trigger('kanban:card_restore');
                     }
                 }
             });
@@ -1542,7 +1604,7 @@ class GLPIKanbanRights {
         /**
        * Generate a user image based on the user's initials.
        * @since 9.5.0
-       * @param {string} teammember The teammember array/object that represents the user.
+       * @param {{}} teammember The teammember array/object that represents the user.
        * @return {string} HTML image of the generated user badge.
        */
         const generateUserBadge = function(teammember) {
@@ -1576,7 +1638,8 @@ class GLPIKanbanRights {
             context.textBaseline = 'middle';
             context.fillText(initials, self.team_image_size / 2, self.team_image_size / 2);
             const src = canvas.toDataURL("image/png");
-            return "<span><img src='" + src + "' title='" + teammember['name'] + "'/></span>";
+            const name = teammember['name'].replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            return "<span><img src='" + src + "' title='" + name + "'/></span>";
         };
 
         /**
@@ -1588,11 +1651,12 @@ class GLPIKanbanRights {
        */
         const generateOtherBadge = function(teammember, icon) {
             const bg_color = getBadgeColor(teammember);
+            const name = teammember['name'].replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
             return `
             <span class='fa-stack fa-lg' style='font-size: ${(self.team_image_size / 2)}px'>
                 <i class='fas fa-circle fa-stack-2x' style="color: ${bg_color}" title="${teammember['name']}"></i>
-                <i class='fas ${icon} fa-stack-1x' title="${teammember['name']}"></i>
+                <i class='fas ${icon} fa-stack-1x' title="${name}"></i>
             </span>
          `;
         };
@@ -1697,14 +1761,14 @@ class GLPIKanbanRights {
 
             const uniqueID = Math.floor(Math.random() * 999999);
             const formID = "form_add_" + itemtype + "_" + uniqueID;
-            let add_form = "<form id='" + formID + "' class='kanban-add-form card kanban-form no-track'>";
-            let form_header = "<div class='kanban-item-header'>";
+            let add_form = `<form id="${formID}" class="kanban-add-form card kanban-form no-track" data-itemtype="${itemtype}">`;
+            let form_header = "<div class='kanban-item-header d-flex justify-content-between'>";
             form_header += `
             <span class='kanban-item-title'>
                <i class="${self.supported_itemtypes[itemtype]['icon']}"></i>
                ${self.supported_itemtypes[itemtype]['name']}
             </span>`;
-            form_header += "<i class='ti ti-x' title='Close' onclick='$(this).parent().parent().remove()'></i></div>";
+            form_header += `<i class="ti ti-x cursor-pointer" title="${__('Close')}" onclick="$(this).parent().parent().remove()"></i></div>`;
             add_form += form_header;
 
             add_form += "<div class='kanban-item-content'>";
@@ -1839,7 +1903,7 @@ class GLPIKanbanRights {
             if (self.rights.canCreateColumn()) {
                 add_form += `
                <hr>${__('Or add a new status')}
-               <button role='button' class='btn btn-primary kanban-create-column d-block'>${__('Create status')}</button>
+               <button class='btn btn-primary kanban-create-column d-block'>${__('Create status')}</button>
             `;
             }
             add_form += "</form></div>";
@@ -2040,7 +2104,7 @@ class GLPIKanbanRights {
                 });
             } else {
                 $(`
-               <li class="position-relative" style="width: 250px">
+               <li class="position-relative mx-auto mt-2" style="width: 250px">
                   ${__('This column cannot support showing cards due to how many cards would be shown. You can still drag cards into this column.')}
                </li>
             `).appendTo(column_body);
@@ -2070,7 +2134,7 @@ class GLPIKanbanRights {
             const col_body = $(column_el).find('.kanban-body').first();
             const readonly = card['_readonly'] !== undefined && (card['_readonly'] === true || card['_readonly'] === 1);
             let card_el = `
-            <li id="${card['id']}" class="kanban-item card ${readonly ? 'readonly' : ''} ${card['is_deleted'] ? 'deleted' : ''}">
+            <li id="${card['id']}" class="kanban-item card ${readonly ? 'readonly' : ''}">
                 <div class="kanban-item-header">
                     <span class="kanban-item-title" title="${card['title_tooltip']}">
                     <i class="${self.supported_itemtypes[itemtype]['icon']}"></i>
@@ -2097,6 +2161,9 @@ class GLPIKanbanRights {
                 $.each(card['_metadata'], (k, v) => {
                     card_obj.data(k, v);
                 });
+                if (card_obj.data('is_deleted')) {
+                    card_obj.addClass('deleted');
+                }
             }
             card_obj.data('_team', card['_team']);
             self.updateColumnCount(column_el);
@@ -2108,6 +2175,7 @@ class GLPIKanbanRights {
             // Refresh core tags autocomplete
             self.filter_input.tokenizer.setAutocomplete('type', Object.keys(self.supported_itemtypes).map(k => `<i class="${self.supported_itemtypes[k].icon} me-1"></i>` + k));
             self.filter_input.tokenizer.setAutocomplete('milestone', ["true", "false"]);
+            self.filter_input.tokenizer.setAutocomplete('deleted', ["true", "false"]);
 
             $(self.element).trigger('kanban:refresh_tokenizer', self.filter_input.tokenizer);
         };
@@ -2190,6 +2258,15 @@ class GLPIKanbanRights {
                     }
                 };
 
+                const filter_boolean = (filter_data, target) => {
+                    const negative_values = ['false', 'no', '0', 0, false, undefined];
+                    const negative_filter = negative_values.includes(typeof filter_data.term === 'string' ? filter_data.term.toLowerCase() : filter_data.term);
+                    const negative_target = negative_values.includes(typeof target === 'string' ? target.toLowerCase() : target);
+                    if ((negative_target !== negative_filter) !== filter_data.exclusion) {
+                        shown = false;
+                    }
+                };
+
                 if (self.filters._text) {
                     try {
                         if (!title.match(new RegExp(self.filters._text, 'i'))) {
@@ -2203,6 +2280,10 @@ class GLPIKanbanRights {
                     }
                 }
 
+                if (self.filters.deleted !== undefined) {
+                    filter_boolean(self.filters.deleted, card.data('is_deleted'));
+                }
+
                 if (self.filters.title !== undefined) {
                     filter_text(self.filters.title, title);
                 }
@@ -2212,8 +2293,11 @@ class GLPIKanbanRights {
                 }
 
                 if (self.filters.milestone !== undefined) {
-                    self.filters.milestone.term = (self.filters.milestone.term == '0' || self.filters.milestone.term == 'false') ? 0 : 1;
-                    filter_equal(self.filters.milestone, card.data('is_milestone'));
+                    filter_boolean(self.filters.milestone, card.data('is_milestone'));
+                }
+
+                if (self.filters.category !== undefined) {
+                    filter_text(self.filters.category, card.data('category'));
                 }
 
                 if (self.filters.content !== undefined) {
@@ -2445,7 +2529,7 @@ class GLPIKanbanRights {
                     l.append(`
                      <div class="member-details">
                         ${member_item}
-                        ${l.attr('data-name') || `${member_itemtype} (${member_items_id})`}
+                        ${escapeMarkupText(l.attr('data-name')) || `${member_itemtype} (${member_items_id})`}
                      </div>
                      <button type="button" name="delete" class="btn btn-ghost-danger">
                         <i class="ti ti-x" title="${__('Delete')}"></i>
@@ -2480,6 +2564,10 @@ class GLPIKanbanRights {
             <button type="button" name="add" class="btn btn-primary">${_x('button', 'Add')}</button>
          `;
             const modal = $('#kanban-modal');
+            // Remove old click handlers
+            modal.off('click', 'button[name="add"]');
+            modal.off('click', 'button[name="delete"]');
+
             modal.on('click', 'button[name="add"]', () => {
                 const itemtype = modal.find('select[name="itemtype"]').val();
                 const items_id = modal.find('select[name="items_id"]').val();

@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -50,6 +52,14 @@ define(
     [
         GLPI_ROOT . '/plugins',
         GLPI_ROOT . '/tests/fixtures/plugins',
+    ]
+);
+
+define(
+    'GLPI_SERVERSIDE_URL_ALLOWLIST',
+    [
+        '/^(https?|feed):\/\/[^@:]+(\/.*)?$/', // default allowlist entry
+        '/^file:\/\/.*\.ics$/', // calendar mockups
     ]
 );
 
@@ -99,7 +109,7 @@ function loadDataset()
    // Unit test data definition
     $data = [
       // bump this version to force reload of the full dataset, when content change
-        '_version' => '4.7',
+        '_version' => '4.9',
 
       // Type => array of entries
         'Entity' => [
@@ -144,6 +154,10 @@ function loadDataset()
             ], [
                 'name'        => '_test_pc22',
                 'entities_id' => '_test_child_2',
+            ], [
+                'name'        => '_test_pc_with_encoded_comment',
+                'entities_id' => '_test_root_entity',
+                'comment'     => '&#60;&#62;', // "&#60;" => "<", "&#62;" => ">"
             ]
         ], 'ComputerModel' => [
             [
@@ -240,6 +254,18 @@ function loadDataset()
                 '_entities_id'  => 0,
                 '_profiles_id'  => 4,
                 '_is_recursive' => 1,
+            ],
+            [
+                'name'          => 'jsmith123',
+                'realname'      => 'Smith',
+                'firstname'     => 'John',
+                'password'      => TU_PASS,
+                'password2'     => TU_PASS,
+                'entities_id'   => '_test_root_entity',
+                'profiles_id'   => 4,
+                '_entities_id'  => 0,
+                '_profiles_id'  => 4,
+                '_is_recursive' => 1,
             ]
         ], 'Group'   => [
             [
@@ -333,13 +359,19 @@ function loadDataset()
                 'comment'      => 'Comment for location _location01'
             ],
             [
-                'name'         => '_location01 > _sublocation01',
+                'name'         => '_sublocation01',
+                'locations_id' => '_location01',
                 'comment'      => 'Comment for location _sublocation01'
             ],
             [
                 'name'         => '_location02',
                 'comment'      => 'Comment for location _sublocation02'
-            ]
+            ],
+            [
+                'name'         => '_location01_subentity',
+                'entities_id'  => '_test_root_entity',
+                'comment'      => 'Comment for location _location01_subentity'
+            ],
         ], Socket::class => [
             [
                 'name'         => '_socket01',

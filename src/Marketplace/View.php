@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -273,6 +275,8 @@ class View extends CommonGLPI
             return;
         }
 
+        $nb_plugins = 0;
+
         $api     = self::getAPI();
         $plugins = $api->getPaginatedPlugins(
             $force,
@@ -280,14 +284,9 @@ class View extends CommonGLPI
             $string_filter,
             $page,
             self::COL_PAGE,
-            $sort
+            $sort,
+            $nb_plugins
         );
-
-        if (strlen($string_filter) > 0) {
-            $nb_plugins = count($plugins);
-        } else {
-            $nb_plugins = $api->getNbPlugins($tag_filter);
-        }
 
         header("X-GLPI-Marketplace-Total: $nb_plugins");
         self::displayList($plugins, "discover", $only_lis, $nb_plugins, $sort, $api->isListTruncated());
@@ -721,24 +720,34 @@ HTML;
             $plugin_data = $mk_controller->getAPI()->getPlugin($plugin_key);
             if (array_key_exists('installation_url', $plugin_data) && $can_be_downloaded) {
                 $warning = "";
-                if ($has_web_update) {
-                    $warning = __s("The plugin has an available update but its directory is not writable.") . "<br>";
+
+                if (!Controller::hasVcsDirectory($plugin_key)) {
+                    if ($has_web_update) {
+                        $warning = __s("The plugin has an available update but its directory is not writable.") . "<br>";
+                    }
+
+                    $warning .= sprintf(
+                        __s("Download archive manually, you must uncompress it in plugins directory (%s)"),
+                        GLPI_ROOT . '/plugins'
+                    );
+
+                    // Use "marketplace.download.php" proxy if archive is downloadable from GLPI marketplace plugins API
+                    // as this API will refuse to serve the archive if registration key is not set in headers.
+                    $download_url = str_starts_with($plugin_data['installation_url'], GLPI_MARKETPLACE_PLUGINS_API_URI)
+                        ? $CFG_GLPI['root_doc'] . '/front/marketplace.download.php?key=' . $plugin_key
+                        : $plugin_data['installation_url'];
+
+                    $buttons .= "<a href='{$download_url}' target='_blank'>
+                            <button title='$warning' class='add_tooltip download_manually'><i class='fas fa-archive'></i></button>
+                        </a>";
+                } else {
+                    $warning = __s("The plugin has an available update but its local directory contains source versioning.") . "<br>";
+                    $warning .= __s("To avoid overwriting a potential branch under development, downloading is disabled.");
+
+                    $buttons .= "<button title='$warning' class='add_tooltip download_manually'>
+                        <i class='fas fa-ban'></i>
+                    </button>";
                 }
-
-                $warning .= sprintf(
-                    __s("Download archive manually, you must uncompress it in plugins directory (%s)"),
-                    GLPI_ROOT . '/plugins'
-                );
-
-                // Use "marketplace.download.php" proxy if archive is downloadable from GLPI marketplace plugins API
-                // as this API will refuse to serve the archive if registration key is not set in headers.
-                $download_url = str_starts_with($plugin_data['installation_url'], GLPI_MARKETPLACE_PLUGINS_API_URI)
-                    ? $CFG_GLPI['root_doc'] . '/front/marketplace.download.php?key=' . $plugin_key
-                    : $plugin_data['installation_url'];
-
-                $buttons .= "<a href='{$download_url}' target='_blank'>
-                        <button title='$warning' class='add_tooltip download_manually'><i class='fas fa-archive'></i></button>
-                    </a>";
             }
         } else if ($can_be_downloaded) {
             if (!$exists) {

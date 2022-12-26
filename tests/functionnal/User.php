@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -171,13 +173,22 @@ class User extends \DbTestCase
         $this->array($user2->fields)->isIdenticalTo($user->fields);
 
         $this->when(
-            function () use ($uid) {
-                $this->testedInstance->getFromDBbyToken($uid, 'my_field');
+            function () {
+                $this->testedInstance->getFromDBbyToken('1485dd60301311eda2610242ac12000249aef69a', 'my_field');
             }
         )->error
-         ->withType(E_USER_WARNING)
-         ->withMessage('User::getFromDBbyToken() can only be called with $field parameter with theses values: \'personal_token\', \'api_token\'')
-         ->exists();
+            ->withType(E_USER_WARNING)
+            ->withMessage('User::getFromDBbyToken() can only be called with $field parameter with theses values: \'personal_token\', \'api_token\'')
+            ->exists();
+
+        $this->when(
+            function () {
+                $this->testedInstance->getFromDBbyToken(['REGEX', '.*'], 'api_token');
+            }
+        )->error()
+            ->withType(E_USER_WARNING)
+            ->withMessage('Unexpected token value received: "string" expected, received "array".')
+            ->exists();
     }
 
     public function testPrepareInputForAdd()

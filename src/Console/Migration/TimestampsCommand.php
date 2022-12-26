@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -36,7 +38,6 @@ namespace Glpi\Console\Migration;
 use DBConnection;
 use Glpi\Console\AbstractCommand;
 use Glpi\System\Requirement\DbTimezones;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -83,11 +84,20 @@ class TimestampsCommand extends AbstractCommand
         if ($tbl_iterator->count() === 0) {
             $output->writeln('<info>' . __('No migration needed.') . '</info>');
         } else {
+            $this->warnAboutExecutionTime();
             $this->askForConfirmation();
 
-            $progress_bar = new ProgressBar($output);
+            $tables = [];
+            foreach ($tbl_iterator as $table_data) {
+                $tables[] = $table_data['TABLE_NAME'];
+            }
+            sort($tables);
 
-            foreach ($progress_bar->iterate($tbl_iterator) as $table) {
+            $progress_message = function (string $table) {
+                return sprintf(__('Migrating table "%s"...'), $table);
+            };
+
+            foreach ($this->iterate($tables, $progress_message) as $table) {
                 $tablealter = ''; // init by default
 
                // get accurate info from information_schema to perform correct alter
@@ -102,7 +112,7 @@ class TimestampsCommand extends AbstractCommand
                     'FROM'   => 'information_schema.columns',
                     'WHERE'  => [
                         'table_schema' => $this->db->dbdefault,
-                        'table_name'   => $table['TABLE_NAME'],
+                        'table_name'   => $table,
                         'data_type'    => 'datetime'
                     ]
                 ]);
@@ -117,7 +127,7 @@ class TimestampsCommand extends AbstractCommand
 
                     // Fix invalid zero dates
                     $this->db->update(
-                        $table['TABLE_NAME'],
+                        $table,
                         [
                             $column['COLUMN_NAME'] => $nullable ? null : '1970-01-01 00:00:01'
                         ],
@@ -170,31 +180,23 @@ class TimestampsCommand extends AbstractCommand
                 $tablealter =  rtrim($tablealter, ",");
 
                // apply alter to table
-                $query = "ALTER TABLE " . $this->db->quoteName($table['TABLE_NAME']) . " " . $tablealter . ";\n";
-                $this->writelnOutputWithProgressBar(
-                    '<comment>' . sprintf(__('Running %s'), $query) . '</comment>',
-                    $progress_bar,
-                    OutputInterface::VERBOSITY_VERBOSE
-                );
+                $query = "ALTER TABLE " . $this->db->quoteName($table) . " " . $tablealter . ";\n";
 
                 $result = $this->db->query($query);
                 if (false === $result) {
-                     $message = sprintf(
-                         __('Update of `%s` failed with message "(%s) %s".'),
-                         $table['TABLE_NAME'],
-                         $this->db->errno(),
-                         $this->db->error()
-                     );
-                     $this->writelnOutputWithProgressBar(
-                         '<error>' . $message . '</error>',
-                         $progress_bar,
-                         OutputInterface::VERBOSITY_QUIET
-                     );
-                     $errors = true;
+                    $message = sprintf(
+                        __('Migration of table "%s" failed with message "(%s) %s".'),
+                        $table,
+                        $this->db->errno(),
+                        $this->db->error()
+                    );
+                    $this->outputMessage(
+                        '<error>' . $message . '</error>',
+                        OutputInterface::VERBOSITY_QUIET
+                    );
+                    $errors = true;
                 }
             }
-
-            $this->output->write(PHP_EOL);
         }
 
         $properties_to_update = [
@@ -231,7 +233,7 @@ class TimestampsCommand extends AbstractCommand
 
         if ($errors) {
             throw new \Glpi\Console\Exception\EarlyExitException(
-                '<error>' . __('Errors occured during migration.') . '</error>',
+                '<error>' . __('Errors occurred during migration.') . '</error>',
                 self::ERROR_TABLE_MIGRATION_FAILED
             );
         }

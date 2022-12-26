@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,20 +17,23 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
+
+use Glpi\Toolbox\Sanitizer;
 
 /**
  * @since 10.0.0
@@ -105,7 +109,9 @@ class PendingReasonCron extends CommonDBTM
             }
 
             if ($item->fields['status'] != CommonITILObject::WAITING) {
-                trigger_error("Status is not pending", E_USER_WARNING);
+                $pending_item->delete([
+                    'id' => $pending_item->fields['id'],
+                ]);
                 continue;
             }
 
@@ -120,8 +126,15 @@ class PendingReasonCron extends CommonDBTM
                     continue;
                 }
 
-               // Load followup template
-                $fup_template = ITILFollowupTemplate::getById($pending_reason->fields['itilfollowuptemplates_id']);
+                $template_id = $pending_reason->fields['itilfollowuptemplates_id'];
+
+                // No template defined; can't bump
+                if (!$template_id) {
+                    continue;
+                }
+
+                // Load followup template
+                $fup_template = ITILFollowupTemplate::getById($template_id);
                 if (!$fup_template) {
                     trigger_error("Failed to load ITILFollowupTemplate::{$pending_reason->fields['itilfollowuptemplates_id']}", E_USER_WARNING);
                     continue;
@@ -144,10 +157,11 @@ class PendingReasonCron extends CommonDBTM
                     'itemtype' => $item::getType(),
                     'items_id' => $item->getID(),
                     'users_id' => $config['system_user'],
-                    'content' => addslashes($fup_template->fields['content']),
+                    'content' => Sanitizer::sanitize($fup_template->getRenderedContent($item)),
                     'is_private' => $fup_template->fields['is_private'],
                     'requesttypes_id' => $fup_template->fields['requesttypes_id'],
                     'timeline_position' => CommonITILObject::TIMELINE_RIGHT,
+                    '_no_reopen' => 1,
                 ]);
                 $task->addVolume(1);
             } else if ($resolve && $now > $resolve) {
@@ -171,7 +185,7 @@ class PendingReasonCron extends CommonDBTM
                     'itemtype'         => $item::getType(),
                     'items_id'         => $item->getID(),
                     'solutiontypes_id' => $solution_template->fields['solutiontypes_id'],
-                    'content'          => addslashes($solution_template->fields['content']),
+                    'content'          => Sanitizer::sanitize($solution_template->getRenderedContent($item)),
                     'users_id'         => $config['system_user'],
                 ]);
                 $task->addVolume(1);

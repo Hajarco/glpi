@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,27 +17,26 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 namespace Glpi\Console\Migration;
 
 use DBConnection;
-use DBmysql;
 use Glpi\Console\AbstractCommand;
-use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -81,36 +81,36 @@ class MyIsamToInnoDbCommand extends AbstractCommand
         if (0 === $myisam_tables->count()) {
             $output->writeln('<info>' . __('No migration needed.') . '</info>');
         } else {
+            $this->warnAboutExecutionTime();
             $this->askForConfirmation();
 
-            $progress_bar = new ProgressBar($output);
+            $tables = [];
+            foreach ($myisam_tables as $table_data) {
+                $tables[] = $table_data['TABLE_NAME'];
+            }
+            sort($tables);
 
-            foreach ($progress_bar->iterate($myisam_tables) as $table) {
-                $table_name = DBmysql::quoteName($table['TABLE_NAME']);
-                $this->writelnOutputWithProgressBar(
-                    '<comment>' . sprintf(__('Migrating table "%s"...'), $table_name) . '</comment>',
-                    $progress_bar,
-                    OutputInterface::VERBOSITY_VERBOSE
-                );
-                $result = $this->db->query(sprintf('ALTER TABLE %s ENGINE = InnoDB', $table_name));
+            $progress_message = function (string $table) {
+                return sprintf(__('Migrating table "%s"...'), $table);
+            };
+
+            foreach ($this->iterate($tables, $progress_message) as $table) {
+                $result = $this->db->query(sprintf('ALTER TABLE %s ENGINE = InnoDB', $this->db->quoteName($table)));
 
                 if (false === $result) {
                     $message = sprintf(
-                        __('Migration of table "%s"  failed with message "(%s) %s".'),
-                        $table_name,
+                        __('Migration of table "%s" failed with message "(%s) %s".'),
+                        $table,
                         $this->db->errno(),
                         $this->db->error()
                     );
-                    $this->writelnOutputWithProgressBar(
+                    $this->outputMessage(
                         '<error>' . $message . '</error>',
-                        $progress_bar,
                         OutputInterface::VERBOSITY_QUIET
                     );
                     $errors = true;
                 }
             }
-
-            $this->output->write(PHP_EOL);
         }
 
         if (!DBConnection::updateConfigProperty(DBConnection::PROPERTY_ALLOW_MYISAM, false)) {
@@ -122,7 +122,7 @@ class MyIsamToInnoDbCommand extends AbstractCommand
 
         if ($errors) {
             throw new \Glpi\Console\Exception\EarlyExitException(
-                '<error>' . __('Errors occured during migration.') . '</error>',
+                '<error>' . __('Errors occurred during migration.') . '</error>',
                 self::ERROR_TABLE_MIGRATION_FAILED
             );
         }

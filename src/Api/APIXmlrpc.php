@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -73,50 +75,56 @@ class APIXmlrpc extends API
 
         $resource = $this->parseIncomingParams();
 
-       // retrieve session (if exist)
+        // retrieve session (if exist)
         $this->retrieveSession();
         $this->initApi();
 
         $code = 200;
 
+        // Do not unlock the php session for ressources that may handle it
+        if (in_array($resource, $this->getRessourcesWithSessionWrite())) {
+            $this->session_write = true;
+        }
+
+        // Check API session unless blacklisted (init session, ...)
+        if (!in_array($resource, $this->getRessourcesAllowedWithoutSession())) {
+            $this->initEndpoint(true, $resource);
+        }
+
         if ($resource === "initSession") {
-            $this->session_write = true;
             $this->returnResponse($this->initSession($this->parameters));
-        } else if ($resource === "killSession") { // logout from glpi
-            $this->session_write = true;
+        } elseif ($resource === "killSession") { // logout from glpi
             $this->returnResponse($this->killSession());
-        } else if ($resource === "changeActiveEntities") { // change active entities
-            $this->session_write = true;
+        } elseif ($resource === "changeActiveEntities") { // change active entities
             $this->returnResponse($this->changeActiveEntities($this->parameters));
-        } else if ($resource === "getMyEntities") { // get all entities of logged user
+        } elseif ($resource === "getMyEntities") { // get all entities of logged user
             $this->returnResponse($this->getMyEntities($this->parameters));
-        } else if ($resource === "getActiveEntities") { // get curent active entity
+        } elseif ($resource === "getActiveEntities") { // get curent active entity
             $this->returnResponse($this->getActiveEntities($this->parameters));
-        } else if ($resource === "changeActiveProfile") { // change active profile
-            $this->session_write = true;
+        } elseif ($resource === "changeActiveProfile") { // change active profile
             $this->returnResponse($this->changeActiveProfile($this->parameters));
-        } else if ($resource === "getMyProfiles") { // get all profiles of current logged user
+        } elseif ($resource === "getMyProfiles") { // get all profiles of current logged user
             $this->returnResponse($this->getMyProfiles($this->parameters));
-        } else if ($resource === "getActiveProfile") { // get current active profile
+        } elseif ($resource === "getActiveProfile") { // get current active profile
             $this->returnResponse($this->getActiveProfile($this->parameters));
-        } else if ($resource === "getFullSession") { // get complete php session
+        } elseif ($resource === "getFullSession") { // get complete php session
             $this->returnResponse($this->getFullSession($this->parameters));
-        } else if ($resource === "getGlpiConfig") { // get complete php var $CFG_GLPI
+        } elseif ($resource === "getGlpiConfig") { // get complete php var $CFG_GLPI
             $this->returnResponse($this->getGlpiConfig($this->parameters));
-        } else if ($resource === "getMultipleItems") { // get multiple items (with various itemtype)
+        } elseif ($resource === "getMultipleItems") { // get multiple items (with various itemtype)
             $this->returnResponse($this->getMultipleItems($this->parameters));
-        } else if ($resource === "listSearchOptions") { // list searchOptions of an itemtype
+        } elseif ($resource === "listSearchOptions") { // list searchOptions of an itemtype
             $this->returnResponse($this->listSearchOptions(
                 $this->parameters['itemtype'],
                 $this->parameters
             ));
-        } else if ($resource === "search") { // Search on itemtype
+        } elseif ($resource === "search") { // Search on itemtype
             $this->checkSessionToken();
 
-           //search
+            // search
             $response =  $this->searchItems($this->parameters['itemtype'], $this->parameters);
 
-           //add pagination headers
+            // add pagination headers
             $additionalheaders                  = [];
             $additionalheaders["Accept-Range"]  = $this->parameters['itemtype'] . " "
                                                . Toolbox::get_max_input_vars();
@@ -124,23 +132,23 @@ class APIXmlrpc extends API
                 $additionalheaders["Content-Range"] = $response['content-range'];
             }
 
-           // diffent http return codes for complete or partial response
+            // different http return codes for complete or partial response
             if ($response['count'] < $response['totalcount']) {
                 $code = 206; // partial content
             }
 
             $this->returnResponse($response, $code, $additionalheaders);
-        } else if ($resource === "lostPassword") {
+        } elseif ($resource === "lostPassword") {
             $this->returnResponse($this->lostPassword($this->parameters));
-        } else if (
+        } elseif (
             in_array(
                 $resource,
                 ["getItem", "getItems", "createItems", "updateItems", "deleteItems"]
             )
         ) {
-           // commonDBTM manipulation
+            // commonDBTM manipulation
 
-           // check itemtype parameter
+            // check itemtype parameter
             if (!isset($this->parameters['itemtype'])) {
                 $this->returnError(__("missing itemtype"), 400, "ITEMTYPE_RESOURCE_MISSING");
             }
@@ -153,8 +161,8 @@ class APIXmlrpc extends API
                     400,
                     "ERROR_ITEMTYPE_NOT_FOUND_NOR_COMMONDBTM"
                 );
-            } else if ($resource === "getItem") { // get an CommonDBTM item
-               // check id parameter
+            } elseif ($resource === "getItem") { // get an CommonDBTM item
+                // check id parameter
                 if (!isset($this->parameters['id'])) {
                     $this->returnError(__("missing id"), 400, "ID_RESOURCE_MISSING");
                 }
@@ -167,8 +175,8 @@ class APIXmlrpc extends API
                     $additionalheaders['Last-Modified'] = gmdate("D, d M Y H:i:s", $datemod) . " GMT";
                 }
                 $this->returnResponse($response, 200, $additionalheaders);
-            } else if ($resource === "getItems") { // get a collection of a CommonDBTM item
-               // return collection of items
+            } elseif ($resource === "getItems") { // get a collection of a CommonDBTM item
+                // return collection of items
                 $totalcount = 0;
                 $response = $this->getItems($this->parameters['itemtype'], $this->parameters, $totalcount);
 
@@ -178,12 +186,12 @@ class APIXmlrpc extends API
                     $range = explode("-", $this->parameters['range']);
                 }
 
-               // fix end range
+                // fix end range
                 if ($range[1] > $totalcount - 1) {
                     $range[1] = $totalcount - 1;
                 }
 
-               // trigger partial content return code
+                // trigger partial content return code
                 if ($range[1] - $range[0] + 1 < $totalcount) {
                     $code = 206; // partial content
                 }
@@ -196,15 +204,15 @@ class APIXmlrpc extends API
                 }
 
                 $this->returnResponse($response, $code, $additionalheaders);
-            } else if ($resource === "createItems") { // create one or many CommonDBTM items
+            } elseif ($resource === "createItems") { // create one or many CommonDBTM items
                 $response = $this->createItems($this->parameters['itemtype'], $this->parameters);
 
                 $additionalheaders = [];
                 if (isset($response['id'])) {
-                   // add a location targetting created element
+                    // add a location targetting created element
                     $additionalheaders['location'] = self::$api_url . "/" . $this->parameters['itemtype'] . "/" . $response['id'];
                 } else {
-                  // add a link header targetting created elements
+                    // add a link header targetting created elements
                     $additionalheaders['link'] = "";
                     foreach ($response as $created_item) {
                         if ($created_item['id']) {
@@ -212,18 +220,18 @@ class APIXmlrpc extends API
                                                   "/" . $created_item['id'] . ",";
                         }
                     }
-                  // remove last comma
+                    // remove last comma
                     $additionalheaders['link'] = trim($additionalheaders['link'], ",");
                 }
                 $this->returnResponse($response, 201);
-            } else if ($resource === "updateItems") { // update one or many CommonDBTM items
+            } elseif ($resource === "updateItems") { // update one or many CommonDBTM items
                 $this->returnResponse($this->updateItems(
                     $this->parameters['itemtype'],
                     $this->parameters
                 ));
-            } else if ($resource === "deleteItems") { // delete one or many CommonDBTM items
+            } elseif ($resource === "deleteItems") { // delete one or many CommonDBTM items
                 if (isset($this->parameters['id'])) {
-                   //override input
+                    // override input
                     $this->parameters['input'] = new \stdClass();
                     $this->parameters['input']->id = $this->parameters['id'];
                 }

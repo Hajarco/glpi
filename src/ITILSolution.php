@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -60,7 +62,7 @@ class ITILSolution extends CommonDBChild
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
     {
         if ($item->isNewItem()) {
-            return;
+            return '';
         }
         if ($item->maySolve()) {
             $nb    = 0;
@@ -70,6 +72,7 @@ class ITILSolution extends CommonDBChild
             }
             return self::createTabEntry($title, $nb);
         }
+        return '';
     }
 
     public static function canView()
@@ -217,41 +220,43 @@ class ITILSolution extends CommonDBChild
             $input = array_replace($template_fields, $input);
         }
 
-       // check itil object is not already solved
-        if (in_array($this->item->fields["status"], $this->item->getSolvedStatusArray())) {
-            Session::addMessageAfterRedirect(
-                __("The item is already solved, did anyone pushed a solution before you?"),
-                false,
-                ERROR
-            );
-            return false;
-        }
-
-       //default status for global solutions
-        $status = CommonITILValidation::ACCEPTED;
-
-       //handle autoclose, for tickets only
-        if ($input['itemtype'] == Ticket::getType()) {
-            $autoclosedelay =  Entity::getUsedConfig(
-                'autoclose_delay',
-                $this->item->getEntityID(),
-                '',
-                Entity::CONFIG_NEVER
-            );
-
-           // 0 = immediatly
-            if ($autoclosedelay != 0) {
-                $status = CommonITILValidation::WAITING;
+        if (!$this->item->isStatusComputationBlocked($input)) {
+        // check itil object is not already solved
+            if (in_array($this->item->fields["status"], $this->item->getSolvedStatusArray())) {
+                Session::addMessageAfterRedirect(
+                    __("The item is already solved, did anyone pushed a solution before you?"),
+                    false,
+                    ERROR
+                );
+                return false;
             }
-        }
 
-       //Accepted; store user and date
-        if ($status == CommonITILValidation::ACCEPTED) {
-            $input['users_id_approval'] = Session::getLoginUserID();
-            $input['date_approval'] = $_SESSION["glpi_currenttime"];
-        }
+            //default status for global solutions
+            $status = CommonITILValidation::ACCEPTED;
 
-        $input['status'] = $status;
+            //handle autoclose, for tickets only
+            if ($input['itemtype'] == Ticket::getType()) {
+                $autoclosedelay =  Entity::getUsedConfig(
+                    'autoclose_delay',
+                    $this->item->getEntityID(),
+                    '',
+                    Entity::CONFIG_NEVER
+                );
+
+                // 0  or ticket status CLOSED = immediately
+                if ($autoclosedelay != 0 && $this->item->fields["status"] != $this->item::CLOSED) {
+                    $status = CommonITILValidation::WAITING;
+                }
+            }
+
+            //Accepted; store user and date
+            if ($status == CommonITILValidation::ACCEPTED) {
+                $input['users_id_approval'] = Session::getLoginUserID();
+                $input['date_approval'] = $_SESSION["glpi_currenttime"];
+            }
+
+            $input['status'] = $status;
+        }
 
        // Render twig content, needed for massives action where we the content
        // can't be rendered directly in the form
@@ -266,7 +271,7 @@ class ITILSolution extends CommonDBChild
                 return false;
             }
 
-            $input['content'] = $html;
+            $input['content'] = Sanitizer::sanitize($html);
         }
 
         return $input;
@@ -284,18 +289,11 @@ class ITILSolution extends CommonDBChild
 
         $item = $this->item;
 
-       // Replace inline pictures
+        // Handle rich-text images and uploaded documents
         $this->input["_job"] = $this->item;
-        $this->input = $this->addFiles(
-            $this->input,
-            [
-                'force_update' => true,
-                'name' => 'content',
-                'content_field' => 'content',
-            ]
-        );
+        $this->input = $this->addFiles($this->input, ['force_update' => true]);
 
-       // Add solution to duplicates
+        // Add solution to duplicates
         if ($this->item->getType() == 'Ticket' && !isset($this->input['_linked_ticket'])) {
             Ticket_Ticket::manageLinkedTicketsOnSolved($this->item->getID(), $this);
         }
@@ -312,8 +310,8 @@ class ITILSolution extends CommonDBChild
                     Entity::CONFIG_NEVER
                 );
 
-                // 0 = immediatly
-                if ($autoclosedelay == 0) {
+                // 0 = immediately or ticket status CLOSED force status
+                if ($autoclosedelay == 0 || $this->item->fields["status"] == $this->item::CLOSED) {
                      $status = $item::CLOSED;
                 }
             }
@@ -347,13 +345,8 @@ class ITILSolution extends CommonDBChild
 
     public function post_updateItem($history = 1)
     {
-       // Replace inline pictures
-        $options = [
-            'force_update' => true,
-            'name' => 'content',
-            'content_field' => 'content',
-        ];
-        $this->input = $this->addFiles($this->input, $options);
+        // Handle rich-text images and uploaded documents
+        $this->input = $this->addFiles($this->input, ['force_update' => true]);
 
         parent::post_updateItem($history);
     }

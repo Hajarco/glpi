@@ -2,13 +2,15 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2010-2022 by the FusionInventory Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,22 +18,25 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 use Glpi\Application\ErrorHandler;
+use Glpi\Application\View\TemplateRenderer;
+use Glpi\Inventory\Conf;
 use Glpi\Toolbox\Sanitizer;
 use GuzzleHttp\Client as Guzzle_Client;
 use GuzzleHttp\Psr7\Response;
@@ -58,10 +63,10 @@ class Agent extends CommonDBTM
     public $dohistory = true;
 
     /** @var string */
-    public static $rightname = 'computer';
+    public static $rightname = 'agent';
    //static $rightname = 'inventory';
 
-    private static $found_adress = false;
+    private static $found_address = false;
 
     public static function getTypeName($nb = 0)
     {
@@ -139,8 +144,180 @@ class Agent extends CommonDBTM
                 'field'         => 'port',
                 'name'          => _n('Port', 'Ports', 1),
                 'datatype'      => 'integer',
+            ], [
+                'id'               => '15',
+                'table'            => $this->getTable(),
+                'field'            => 'items_id',
+                'name'             =>  _n('Item', 'Items', 1),
+                'nosearch'         => true,
+                'massiveaction'    => false,
+                'forcegroupby'     => true,
+                'datatype'         => 'specific',
+                'searchtype'       => 'equals',
+                'additionalfields' => ['itemtype'],
+                'joinparams'       => ['jointype' => 'child']
+            ],
+            [
+                'id'            => '16',
+                'table'         => $this->getTable(),
+                'field'         => 'remote_addr',
+                'name'          => __('Public contact address'),
+                'datatype'      => 'text',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 17,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_wake_on_lan',
+                'name'          => __('Wake on LAN'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 18,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_computer_inventory',
+                'name'          => __('Computer inventory'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 19,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_esx_remote_inventory',
+                'name'          => __('ESX remote inventory'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 20,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_network_inventory',
+                'name'          => __('Network inventory (SNMP)'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 21,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_network_discovery',
+                'name'          => __('Network discovery (SNMP)'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 22,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_package_deployment',
+                'name'          => __('Package Deployment'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 23,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_collect_data',
+                'name'          => __('Collect data'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => 24,
+                'table'         => $this->getTable(),
+                'field'         => 'use_module_remote_inventory',
+                'name'          => __('Remote inventory'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
             ]
+
         ];
+
+        return $tab;
+    }
+
+    public static function getSpecificValueToDisplay($field, $values, array $options = [])
+    {
+
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+
+        switch ($field) {
+            case 'items_id':
+                $itemtype = $values[str_replace('items_id', 'itemtype', $field)] ?? null;
+                if ($itemtype !== null && class_exists($itemtype)) {
+                    if ($values[$field] > 0) {
+                        $item = new $itemtype();
+                        $item->getFromDB($values[$field]);
+                        return "<a href='" . $item->getLinkURL() . "'>" . $item->fields['name'] . "</a>";
+                    }
+                } else {
+                    return ' ';
+                }
+                break;
+        }
+        return parent::getSpecificValueToDisplay($field, $values, $options);
+    }
+
+
+    public static function rawSearchOptionsToAdd()
+    {
+        $tab = [];
+
+        // separator
+        $tab[] = [
+            'id'   => 'agent',
+            'name' => self::getTypeName(1),
+        ];
+
+        $baseopts = [
+            'table'      => self::getTable(),
+            'joinparams' => [
+                'jointype' => 'itemtype_item',
+            ],
+        ];
+
+        $tab[] = [
+            'id'         => 900,
+            'field'      => 'name',
+            'name'       => __('Name'),
+            'datatype'   => 'itemlink',
+        ] + $baseopts;
+
+        $tab[] = [
+            'id'         => 901,
+            'field'      => 'tag',
+            'name'       => __('Tag'),
+            'datatype'   => 'text',
+        ] + $baseopts;
+
+        $tab[] = [
+            'id'         => 902,
+            'field'      => 'last_contact',
+            'name'       => __('Last contact'),
+            'datatype'   => 'datetime',
+        ] + $baseopts;
+
+        $tab[] = [
+            'id'         => 903,
+            'field'      => 'version',
+            'name'       => _n('Version', 'Versions', 1),
+            'datatype'   => 'text',
+        ] + $baseopts;
+
+        $tab[] = [
+            'id'         => 904,
+            'field'      => 'deviceid',
+            'name'       => __('Device id'),
+            'datatype'   => 'text',
+        ] + $baseopts;
+
+        $tab[] = [
+            'id'         => 905,
+            'field'      => 'remote_addr',
+            'name'       => __('Public contact address'),
+            'datatype'   => 'text',
+        ] + $baseopts;
 
         return $tab;
     }
@@ -156,6 +333,7 @@ class Agent extends CommonDBTM
 
         $ong = [];
         $this->addDefaultFormTab($ong);
+        $this->addStandardTab('RuleMatchedLog', $ong, $options);
         $this->addStandardTab('Log', $ong, $options);
 
         return $ong;
@@ -179,157 +357,17 @@ class Agent extends CommonDBTM
             $this->getEmpty();
         }
         $this->initForm($id, $options);
-        $this->showFormHeader($options);
 
-        echo "<tr class='tab_bg_1'>";
-        echo "<td><label for='name'>" . __('Name') . "</label></td>";
-        echo "<td>";
-        echo Html::input('name', ['value' => $this->fields['name'], 'size' => 40]);
-        echo "</td>";
-        echo "<td>" . __('Locked') . "</td>";
-        echo "<td>";
-        Dropdown::showYesNo('locked', $this->fields["locked"]);
-        echo "</td>";
-        echo "</tr>";
+        // avoid generic form to display generic version field as we have an exploded view
+        $versions = $this->fields['version'] ?? '';
+        unset($this->fields['version']);
 
-        echo "<tr class='tab_bg_1'>";
-        echo "<td><label for='deviceid'>" . __('Device id') . "</label></td>";
-        echo "<td>";
-        echo Html::input('deviceid', ['value' => $this->fields['deviceid'], 'size' => 40, 'required' => 'required']);
-        echo "</td>";
-        echo "<td>" . _n('Port', 'Ports', 1) . "</td>";
-        echo "<td>";
-        echo Html::input('port', ['value' => $this->fields['port'], 'type' => 'number']);
-        echo "</td>";
-        echo "</tr>";
-
-        echo "<tr class='tab_bg_1'>";
-        echo "<td><label for='agenttypes_id'>" . AgentType::getTypeName(1) . "</label></td>";
-        echo "<td>";
-
-        $value = $this->isNewItem() ? 1 : $this->fields['agenttypes_id'];
-        AgentType::dropdown(['value' => $value]);
-
-        echo "</td>";
-        echo "</tr>";
-
-        echo "<tr class='tab_bg_1'>";
-        echo "<td>" . __('Item type') . "</td>";
-        echo "<td>";
-        $itemtype = $this->fields['itemtype'];
-        Dropdown::showFromArray('itemtype', array_combine($CFG_GLPI['inventory_types'], $CFG_GLPI['inventory_types']), ['value' => $itemtype]);
-        echo "</td>";
-        echo "<td>" . __('Item link') . "</td>";
-        echo "<td>";
-        if (!empty($this->fields["items_id"]) && $itemtype) {
-            $asset = new $this->fields['itemtype']();
-            $asset->getFromDB($this->fields['items_id']);
-            echo $asset->getLink(1);
-            echo Html::hidden(
-                'items_id',
-                [
-                    'value' => $this->fields["items_id"]
-                ]
-            );
-        }
-        echo "</td>";
-        echo "</tr>";
-
-        if (!$this->isNewItem()) {
-            echo "<tr class='tab_bg_1'>";
-            echo "<td>" . _n('Version', 'Versions', 1) . "</td>";
-            echo "<td>";
-            $versions = importArrayFromDB($this->fields["version"]);
-            foreach ($versions as $module => $version) {
-                echo "<strong>" . $module . "</strong>: " . $version . "<br/>";
-            }
-            echo "</td>";
-            echo "<td>" . __('Tag') . "</td>";
-            echo "<td>";
-            echo $this->fields["tag"];
-            echo "</td>";
-            echo "</tr>";
-
-            echo "<tr class='tab_bg_1'>";
-            echo "<td>" . __('Useragent') . "</td>";
-            echo "<td>";
-            echo $this->fields["useragent"];
-            echo "</td>";
-            echo "<td>" . __('Last contact') . "</td>";
-            echo "<td>";
-            echo Html::convDateTime($this->fields["last_contact"]);
-            echo "</td>";
-            echo "</tr>";
-
-            echo "<tr class='tab_bg_1'>";
-            echo "<td>" . __('Network discovery threads') . "</td>";
-            echo "<td>";
-            $general = __('General setup');
-            if (isset($CFG_GLPI['threads_networkdiscovery'])) {
-                $general = sprintf('%1$s (%2$s)', $general, $CFG_GLPI['threads_networkdiscovery']);
-            }
-            Dropdown::showNumber(
-                'threads_networkdiscovery',
-                [
-                    'value' => $this->fields['threads_networkdiscovery'],
-                    'toadd' => [0 => $general],
-                    'min' => 1
-                ]
-            );
-            echo "</td>";
-            echo "<td>" . __('Network discovery timeout') . "</td>";
-            echo "<td>";
-            $general = __('General setup');
-            if (isset($CFG_GLPI['timeout_networkdiscovery'])) {
-                $general = sprintf('%1$s (%2$s)', $general, $CFG_GLPI['timeout_networkdiscovery']);
-            }
-            Dropdown::showNumber(
-                'timeout_networkdiscovery',
-                [
-                    'value' => $this->fields['timeout_networkdiscovery'],
-                    'toadd' => [0 => $general],
-                    'min' => 1
-                ]
-            );
-            echo "</td>";
-            echo "</tr>";
-
-            echo "<tr class='tab_bg_1'>";
-            echo "<td>" . __('Network inventory threads') . "</td>";
-            echo "<td>";
-            $general = __('General setup');
-            if (isset($CFG_GLPI['threads_networkinventory'])) {
-                $general = sprintf('%1$s (%2$s)', $general, $CFG_GLPI['threads_networkinventory']);
-            }
-            Dropdown::showNumber(
-                'threads_networkinventory',
-                [
-                    'value' => $this->fields['threads_networkinventory'],
-                    'toadd' => [0 => $general],
-                    'min' => 1
-                ]
-            );
-            echo "</td>";
-            echo "<td>" . __('Network inventory timeout') . "</td>";
-            echo "<td>";
-            $general = __('General setup');
-            if (isset($CFG_GLPI['timeout_networkinventory'])) {
-                $general = sprintf('%1$s (%2$s)', $general, $CFG_GLPI['timeout_networkinventory']);
-            }
-            Dropdown::showNumber(
-                'timeout_networkinventory',
-                [
-                    'value' => $this->fields['timeout_networkinventory'],
-                    'toadd' => [0 => $general],
-                    'min' => 1
-                ]
-            );
-            echo "</td>";
-            echo "</tr>";
-        }
-
-        $this->showFormButtons($options);
-
+        TemplateRenderer::getInstance()->display('pages/admin/inventory/agent.html.twig', [
+            'item'           => $this,
+            'params'         => $options,
+            'itemtypes'      => array_combine($CFG_GLPI['inventory_types'], $CFG_GLPI['inventory_types']),
+            'versions_field' => $versions,
+        ]);
         return true;
     }
 
@@ -371,7 +409,41 @@ class Agent extends CommonDBTM
             $input['tag'] = $metadata['tag'];
         }
 
-        if ($deviceid === 'foo' || !in_array($metadata['itemtype'], $CFG_GLPI['agent_types'])) {
+        if (isset($metadata['port'])) {
+            $input['port'] = $metadata['port'];
+        }
+
+        if (isset($metadata['enabled-tasks'])) {
+            $input['use_module_computer_inventory']   = in_array("inventory", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_network_discovery']    = in_array("netdiscovery", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_network_inventory']    = in_array("netinventory", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_remote_inventory']     = in_array("remoteinventory", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_wake_on_lan']          = in_array("wakeonlan", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_esx_remote_inventory'] = in_array("esx", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_package_deployment']   = in_array("deploy", $metadata['enabled-tasks']) ? 1 : 0;
+            $input['use_module_collect_data']         = in_array("collect", $metadata['enabled-tasks']) ? 1 : 0;
+        }
+
+        $remote_ip = "";
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            //Managing IP through a PROXY
+            $remote_ip = explode(', ', $_SERVER['HTTP_X_FORWARDED_FOR'])[0];
+        } elseif (isset($_SERVER['HTTP_X_REAL_IP'])) {
+            //try with X-Real-IP
+            $remote_ip = $_SERVER['HTTP_X_REAL_IP'];
+        } elseif (isset($_SERVER['REMOTE_ADDR'])) {
+            //then get connected IP
+            $remote_ip = $_SERVER['REMOTE_ADDR'];
+        }
+
+        $remote_ip = new IPAddress($remote_ip);
+        if ($remote_ip->is_valid()) {
+            $input['remote_addr'] = $remote_ip->getTextual();
+        }
+
+
+        $has_expected_agent_type = in_array($metadata['itemtype'], $CFG_GLPI['agent_types']);
+        if ($deviceid === 'foo' || (!$has_expected_agent_type && !$aid)) {
             $input += [
                 'items_id' => 0,
                 'id' => 0
@@ -383,7 +455,17 @@ class Agent extends CommonDBTM
         $input = Toolbox::addslashes_deep($input);
         if ($aid) {
             $input['id'] = $aid;
+            // We should not update itemtype in db if not an expected one
+            if (!$has_expected_agent_type) {
+                unset($input['itemtype']);
+            }
             $this->update($input);
+            // Don't keep linked item unless having expected agent type
+            if (!$has_expected_agent_type) {
+                $this->fields['items_id'] = 0;
+                // But always keep itemtype for class instantiation
+                $this->fields['itemtype'] = $metadata['itemtype'];
+            }
         } else {
             $input['items_id'] = 0;
             $aid = $this->add($input);
@@ -447,7 +529,7 @@ class Agent extends CommonDBTM
     }
 
     /**
-     * Guess possible adresses the agent should answer on
+     * Guess possible addresses the agent should answer on
      *
      * @return array
      */
@@ -455,20 +537,20 @@ class Agent extends CommonDBTM
     {
         global $DB;
 
-        $adresses = [];
+        $addresses = [];
 
        //retrieve linked items
         $item = $this->getLinkedItem();
         if ((int)$item->getID() > 0) {
             $item_name = $item->getFriendlyName();
-            $adresses[] = $item_name;
+            $addresses[] = $item_name;
 
            //deviceid should contains machines name
             $matches = [];
             preg_match('/^(\s)+-\d{4}(-\d{2}){5}$/', $this->fields['deviceid'], $matches);
             if (isset($matches[1])) {
-                if (!in_array($matches[1], $adresses)) {
-                    $adresses[] = $matches[1];
+                if (!in_array($matches[1], $addresses)) {
+                    $addresses[] = $matches[1];
                 }
             }
 
@@ -515,12 +597,12 @@ class Agent extends CommonDBTM
                 ]
             ]);
             foreach ($ports_iterator as $row) {
-                if (!in_array($row['name'], $adresses)) {
+                if (!in_array($row['name'], $addresses)) {
                     if ($row['version'] == 4) {
-                        $adresses[] = $row['name'];
+                        $addresses[] = $row['name'];
                     } else {
                         //surrounds IPV6 with '[' and ']'
-                        $adresses[] = "[" . $row['name'] . "]";
+                        $addresses[] = "[" . $row['name'] . "]";
                     }
                 }
             }
@@ -544,11 +626,11 @@ class Agent extends CommonDBTM
             ]);
 
             foreach ($iterator as $row) {
-                 $adresses[] = sprintf('%s.%s', $item_name, $row['name']);
+                 $addresses[] = sprintf('%s.%s', $item_name, $row['name']);
             }
         }
 
-        return $adresses;
+        return $addresses;
     }
 
     /**
@@ -558,7 +640,7 @@ class Agent extends CommonDBTM
      */
     public function getAgentURLs(): array
     {
-        $adresses = $this->guessAddresses();
+        $addresses = $this->guessAddresses();
         $protocols = ['http', 'https'];
         $port = (int)$this->fields['port'];
         if ($port === 0) {
@@ -567,7 +649,7 @@ class Agent extends CommonDBTM
 
         $urls = [];
         foreach ($protocols as $protocol) {
-            foreach ($adresses as $address) {
+            foreach ($addresses as $address) {
                 $urls[] = sprintf(
                     '%s://%s:%s',
                     $protocol,
@@ -591,16 +673,16 @@ class Agent extends CommonDBTM
     {
         global $CFG_GLPI;
 
-        if (self::$found_adress !== false) {
-            $adresses = [self::$found_adress];
+        if (self::$found_address !== false) {
+            $addresses = [self::$found_address];
         } else {
-            $adresses = $this->getAgentURLs();
+            $addresses = $this->getAgentURLs();
         }
 
         $response = null;
-        foreach ($adresses as $adress) {
+        foreach ($addresses as $address) {
             $options = [
-                'base_uri'        => sprintf('%s/%s', $adress, $endpoint),
+                'base_uri'        => $address,
                 'connect_timeout' => self::TIMEOUT,
             ];
 
@@ -617,11 +699,10 @@ class Agent extends CommonDBTM
             $httpClient = new Guzzle_Client($options);
             try {
                 $response = $httpClient->request('GET', $endpoint, []);
-                self::$found_adress = $adress;
+                self::$found_address = $address;
                 break;
             } catch (Exception $e) {
-                //many adresses will be incorrect
-                $cs = true;
+                //many addresses will be incorrect
             }
         }
 
@@ -710,5 +791,87 @@ class Agent extends CommonDBTM
     public static function getIcon()
     {
         return "ti ti-robot";
+    }
+
+    /**
+     * Cron task: clean and do other defined actions when agent not have been contacted
+     * the server since xx days
+     *
+     * @global object $DB
+     * @param object $task
+     * @return boolean
+     * @copyright 2010-2022 by the FusionInventory Development Team.
+     */
+    public static function cronCleanoldagents($task = null)
+    {
+        global $DB;
+
+        $config = \Config::getConfigurationValues('inventory');
+
+        $retention_time = $config['stale_agents_delay'] ?? 0;
+        if ($retention_time <= 0) {
+            return true;
+        }
+
+        $iterator = $DB->request([
+            'FROM' => self::getTable(),
+            'WHERE' => [
+                'last_contact' => ['<', new QueryExpression("date_add(now(), interval -" . $retention_time . " day)")]
+            ]
+        ]);
+
+        $cron_status = false;
+        if (count($iterator)) {
+            $actions = importArrayFromDB($config['stale_agents_action']);
+            foreach ($actions as $action) {
+                switch ($action) {
+                    case Conf::STALE_AGENT_ACTION_CLEAN:
+                        //delete agents
+                        $agent = new self();
+                        foreach ($iterator as $data) {
+                            $agent->delete($data);
+                            $task->addVolume(1);
+                            $cron_status = true;
+                        }
+                        break;
+                    case Conf::STALE_AGENT_ACTION_STATUS:
+                        if (isset($config['stale_agents_status'])) {
+                            //change status of agents linked assets
+                            foreach ($iterator as $data) {
+                                $itemtype = $data['itemtype'];
+                                if (is_subclass_of($itemtype, CommonDBTM::class)) {
+                                    $item = new $itemtype();
+                                    if ($item->getFromDB($data['items_id']) && $item->fields['is_dynamic'] == 1) {
+                                        $item->update([
+                                            'id' => $data['items_id'],
+                                            'states_id' => $config['stale_agents_status']
+                                        ]);
+                                        $task->addVolume(1);
+                                        $cron_status = true;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case Conf::STALE_AGENT_ACTION_TRASHBIN:
+                        //put linked assets in trashbin
+                        foreach ($iterator as $data) {
+                            $itemtype = $data['itemtype'];
+                            if (is_subclass_of($itemtype, CommonDBTM::class)) {
+                                $item = new $itemtype();
+                                if ($item->getFromDB($data['items_id']) && $item->fields['is_dynamic'] == 1) {
+                                    $item->delete([
+                                        'id' => $data['items_id']
+                                    ]);
+                                    $task->addVolume(1);
+                                    $cron_status = true;
+                                }
+                            }
+                        }
+                        break;
+                }
+            }
+        }
+        return $cron_status;
     }
 }

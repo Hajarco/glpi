@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -51,15 +53,15 @@ class RuleImportAsset extends DbTestCase
         $this->items_id = null;
         $this->itemtype = null;
         $this->rules_id = null;
-        $this->ports_id = null;
+        $this->ports_id = [];
     }
 
-    public function rulepassed($items_id, $itemtype, $rules_id, $ports_id = 0)
+    public function rulepassed($items_id, $itemtype, $rules_id, $ports_id = [])
     {
         $this->items_id = (int)$items_id;
         $this->itemtype = $itemtype;
         $this->rules_id = (int)$rules_id;
-        $this->ports_id = (int)$ports_id;
+        $this->ports_id = (array)$ports_id;
     }
 
     protected function enableRule($name)
@@ -374,7 +376,7 @@ class RuleImportAsset extends DbTestCase
         $this->string($rule->fields['name'])->isIdenticalTo("Computer update (by mac)");
         $this->integer($this->items_id)->isIdenticalTo($computers_id);
         $this->string($this->itemtype)->isIdenticalTo('Computer');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id);
+        $this->array($this->ports_id)->isEqualTo([$ports_id]);
     }
 
     /**
@@ -406,7 +408,7 @@ class RuleImportAsset extends DbTestCase
             ],
             [
                 'action_type' => 'assign',
-                'field'       => '_fusion',
+                'field'       => '_inventory',
                 'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_IMPORT,
             ],
             "Computer update (by mac)"
@@ -428,7 +430,7 @@ class RuleImportAsset extends DbTestCase
             ],
             [
                 'action_type' => 'assign',
-                'field'       => '_fusion',
+                'field'       => '_inventory',
                 'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_IMPORT,
             ],
             "Computer import (by mac)"
@@ -503,7 +505,7 @@ class RuleImportAsset extends DbTestCase
         $this->string($rule->fields['name'])->isIdenticalTo("Computer update (by ip)");
         $this->integer($this->items_id)->isIdenticalTo($computers_id);
         $this->string($this->itemtype)->isIdenticalTo('Computer');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id);
+        $this->array($this->ports_id)->isEqualTo([$ports_id]);
     }
 
 
@@ -536,7 +538,7 @@ class RuleImportAsset extends DbTestCase
             ],
             [
                 'action_type' => 'assign',
-                'field'       => '_fusion',
+                'field'       => '_inventory',
                 'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_NO_IMPORT,
             ],
             "Computer update (by mac)"
@@ -612,7 +614,7 @@ class RuleImportAsset extends DbTestCase
         $this->string($rule->fields['name'])->isIdenticalTo("Computer update (by ip)");
         $this->integer($this->items_id)->isIdenticalTo($computers_id);
         $this->string($this->itemtype)->isIdenticalTo('Computer');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id);
+        $this->array($this->ports_id)->isEqualTo([$ports_id]);
     }
 
     /**
@@ -709,10 +711,10 @@ class RuleImportAsset extends DbTestCase
         $this->integer($_rule_id)->isGreaterThan(0);
 
         $this->boolean($rule->getFromDB($_rule_id))->isTrue();
-        $this->string($rule->fields['name'])->isIdenticalTo("Device import (by mac+ifnumber)");
+        $this->string($rule->fields['name'])->isIdenticalTo("Global import (by mac+ifnumber)");
         $this->integer($this->items_id)->isIdenticalTo(0);
         $this->string($this->itemtype)->isIdenticalTo('Unmanaged'); //not handled yet...
-        $this->integer($this->ports_id)->isIdenticalTo(0);
+        $this->array($this->ports_id)->isEmpty();
     }
 
     /**
@@ -764,10 +766,10 @@ class RuleImportAsset extends DbTestCase
         $this->integer($_rule_id)->isGreaterThan(0);
 
         $this->boolean($rule->getFromDB($_rule_id))->isTrue();
-        $this->string($rule->fields['name'])->isIdenticalTo("Device update (by mac+ifnumber restricted port)");
+        $this->string($rule->fields['name'])->isIdenticalTo("Global update (by mac+ifnumber restricted port)");
         $this->integer($this->items_id)->isIdenticalTo($networkEquipments_id);
         $this->string($this->itemtype)->isIdenticalTo('NetworkEquipment');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id);
+        $this->array($this->ports_id)->isEqualTo([$ports_id]);
     }
 
    //Above commented tests are related to SNMP inventory
@@ -834,14 +836,14 @@ class RuleImportAsset extends DbTestCase
         $this->integer($_rule_id)->isGreaterThan(0);
 
         $this->boolean($rule->getFromDB($_rule_id))->isTrue();
-        $this->string($rule->fields['name'])->isIdenticalTo("Device update (by ip+ifdescr restricted port)");
+        $this->string($rule->fields['name'])->isIdenticalTo("Global update (by ip+ifdescr restricted port)");
         $this->integer($this->items_id)->isIdenticalTo($networkEquipments_id);
         $this->string($this->itemtype)->isIdenticalTo('NetworkEquipment');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id_1);
+        $this->array($this->ports_id)->isEqualTo([$ports_id_1]);
 
         $this->items_id = 0;
         $this->itemtype = "";
-        $this->ports_id = 0;
+        $this->ports_id = [];
         $input = [
             'ifdescr' => 'FastEthernet0/1',
             'ip'      => '192.168.0.2',
@@ -877,6 +879,7 @@ class RuleImportAsset extends DbTestCase
         ]);
         $this->integer($networkEquipments_id)->isGreaterThan(0);
 
+        $a_portids = [];
         $ports_id = $networkPort->add([
             'mac'                => '00:1a:6c:9a:fc:99',
             'name'               => 'Fa0/1',
@@ -894,35 +897,37 @@ class RuleImportAsset extends DbTestCase
             'ifdescr'         => 'FastEthernet0/1',
         ]);
         $this->integer($ports_id)->isGreaterThan(0);
+        $a_portids[] = $ports_id;
 
-        $this->integer(
-            $networkPort->add([
-                'mac'                => '00:1a:6c:9a:fc:98',
-                'name'               => 'Fa0/2',
-                'logical_number'     => '10102',
-                'instantiation_type' => 'NetworkPortEthernet',
-                'items_id'           => $networkEquipments_id,
-                'itemtype'           => 'NetworkEquipment',
-                'ip'                 => '192.168.0.2',
-                '_create_children'   => 1,
-                'NetworkName_name'   => '',
-                'NetworkName_fqdns_id' => 0,
-                'NetworkName__ipaddresses' => [
-                    '-1' => '192.168.0.2'
-                ],
-                'ifdescr'         => 'FastEthernet0/2',
-            ])
-        )->isGreaterThan(0);
+        $ports_id = $networkPort->add([
+            'mac'                => '00:1a:6c:9a:fc:98',
+            'name'               => 'Fa0/2',
+            'logical_number'     => '10102',
+            'instantiation_type' => 'NetworkPortEthernet',
+            'items_id'           => $networkEquipments_id,
+            'itemtype'           => 'NetworkEquipment',
+            'ip'                 => '192.168.0.2',
+            '_create_children'   => 1,
+            'NetworkName_name'   => '',
+            'NetworkName_fqdns_id' => 0,
+            'NetworkName__ipaddresses' => [
+                '-1' => '192.168.0.2'
+            ],
+            'ifdescr'         => 'FastEthernet0/2',
+        ]);
+        $this->integer($ports_id)->isGreaterThan(0);
+        $a_portids[] = $ports_id;
 
         $data = $ruleCollection->processAllRules($input, [], ['class' => $this]);
 
         $this->integer((int)$data['_ruleid'])->isGreaterThan(0);
 
         $this->boolean($rule->getFromDB($data['_ruleid']))->isTrue();
-        $this->string($rule->fields['name'])->isIdenticalTo('Device update (by ip+ifdescr not restricted port)');
+        $this->string($rule->fields['name'])->isIdenticalTo('Global update (by ip+ifdescr not restricted port)');
         $this->integer($this->items_id)->isIdenticalTo($networkEquipments_id);
         $this->string($this->itemtype)->isIdenticalTo('NetworkEquipment');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id);
+        $this->array($this->ports_id)->hasSize(count($a_portids));
+        $this->array($this->ports_id)->containsValues($a_portids);
     }
 
     /**
@@ -984,7 +989,7 @@ class RuleImportAsset extends DbTestCase
         $this->string($rule->fields['name'])->isIdenticalTo("Update only mac address (mac on switch port)");
         $this->integer($this->items_id)->isIdenticalTo($printers_id);
         $this->string($this->itemtype)->isIdenticalTo('Printer');
-        $this->integer($this->ports_id)->isIdenticalTo($ports_id_2);
+        $this->array($this->ports_id)->isEqualTo([$ports_id_2]);
     }
 
     public function testGetTitle()
@@ -1011,7 +1016,7 @@ class RuleImportAsset extends DbTestCase
          ->if($this->newTestedInstance)
          ->then
             ->array($this->testedInstance->getCriterias())
-            ->hasSize(22);
+            ->hasSize(23);
     }
 
     public function testGetActions()
@@ -1112,5 +1117,134 @@ class RuleImportAsset extends DbTestCase
          ->then
             ->array($this->testedInstance->addMoreCriteria($criterion))
             ->isIdenticalTo($expected);
+    }
+
+    public function testCreateComputerSerial_emptyUUID()
+    {
+        $computer = getItemByTypeName('Computer', '_test_pc01');
+        $fields   = $computer->fields;
+        unset($fields['id']);
+        unset($fields['date_creation']);
+        unset($fields['date_mod']);
+        $fields['name'] = $this->getUniqueString();
+        $fields['serial'] = '75F4BFC';
+        $this->integer((int)$computer->add(\Toolbox::addslashes_deep($fields)))->isGreaterThan(0);
+
+        $input = [
+            'itemtype' => 'Computer',
+            'name'     => 'pc-02',
+            'serial'   => '75F4BFC',
+            'uuid'     => '01391796-50A4-0246-955B-417652A8AF14',
+            'entities_id' => 0
+        ];
+
+        $ruleCollection = new \RuleImportAssetCollection();
+        $rule = new \RuleImportAsset();
+
+        $data = $ruleCollection->processAllRules($input, [], ['class' => $this]);
+
+        $this->array($data)->hasKey('_ruleid');
+        $_rule_id = (int)$data['_ruleid'];
+        $this->integer($_rule_id)->isGreaterThan(0);
+
+        $this->boolean($rule->getFromDB($_rule_id))->isTrue();
+        $this->string($rule->fields['name'])->isIdenticalTo("Computer update (by serial + uuid is empty in GLPI)");
+        $this->string($this->itemtype)->isIdenticalTo('Computer');
+    }
+
+    /**
+     * Create rules for update Computer based on computer name and TAG
+     *
+     * @return void
+     */
+    private function updateComputerAgentTagRules()
+    {
+       // Create rules
+        $this->addRule(
+            "Computer update (by name and tag)",
+            [
+                [
+                    'condition' => 0,
+                    'criteria'  => 'itemtype',
+                    'pattern'   => 'Computer',
+                ],
+                [
+                    'condition' => \RuleImportAsset::PATTERN_FIND,
+                    'criteria'  => 'name',
+                    'pattern'   => '1',
+                ],
+                [
+                    'condition' => \RuleImportAsset::PATTERN_EXISTS,
+                    'criteria'  => 'name',
+                    'pattern'   => '1',
+                ],
+                [
+                    'condition' => \RuleImportAsset::PATTERN_FIND,
+                    'criteria'  => 'tag',
+                    'pattern'   => '1',
+                ],
+                [
+                    'condition' => \RuleImportAsset::PATTERN_EXISTS,
+                    'criteria'  => 'tag',
+                    'pattern'   => '1',
+                ],
+            ],
+            [
+                'action_type' => 'assign',
+                'field'       => '_inventory',
+                'value'       => \RuleImportAsset::RULE_ACTION_LINK_OR_IMPORT,
+            ],
+            "Computer constraint (name)"
+        );
+    }
+
+    public function testUpdateComputerByNameAndTag()
+    {
+        global $DB;
+
+        $this->updateComputerAgentTagRules();
+
+        //create computer
+        $computer = new \Computer();
+        $computers_id = (int)$computer->add([
+            'entities_id' => 0,
+            'name'        => 'pc-11',
+        ]);
+        $this->integer($computers_id)->isGreaterThan(0);
+
+        //create linked agent
+        $agent = new \Agent();
+        $agenttype = $DB->request(['FROM' => \AgentType::getTable(), 'WHERE' => ['name' => 'Core']])->current();
+        $agents_id = (int)$agent->add([
+            'deviceid' => 'my_specific_agent_deviceid',
+            'tag' => 'my_specific_agent_tag',
+            'itemtype' => "Computer",
+            'agenttypes_id' => $agenttype['id'],
+            'items_id' => $computers_id,
+            'name'        => 'pc-11',
+        ]);
+        $this->integer($agents_id)->isGreaterThan(0);
+
+        $input = [
+            'itemtype'      => 'Computer',
+            'name'          => 'pc-11',
+            'tag'           => 'my_specific_agent_tag',
+            'deviceid'     => 'my_specific_agent_deviceid',
+            'ip'            => ['192.168.0.10'],
+            'entities_id'   => 0
+        ];
+        $ruleCollection = new \RuleImportAssetCollection();
+        $rule = new \RuleImportAsset();
+
+        $data = $ruleCollection->processAllRules($input, [], ['class' => $this]);
+
+        $this->array($data)->hasKey('_ruleid');
+        $_rule_id = (int)$data['_ruleid'];
+        $this->integer($_rule_id)->isGreaterThan(0);
+
+        $this->boolean($rule->getFromDB($_rule_id))->isTrue();
+        $this->string($rule->fields['name'])->isIdenticalTo("Computer update (by name and tag)");
+        $this->integer($this->items_id)->isIdenticalTo($computers_id);
+        $this->string($this->itemtype)->isIdenticalTo('Computer');
     }
 }

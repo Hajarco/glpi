@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -229,7 +231,7 @@ abstract class API
 
             if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
                 header("Access-Control-Allow-Headers: " .
-                   "origin, content-type, accept, session-token, authorization");
+                   "origin, content-type, accept, session-token, authorization, app-token");
             }
             exit(0);
         }
@@ -280,7 +282,7 @@ abstract class API
 
         $noAuto = true;
         if (isset($params['user_token']) && !empty($params['user_token'])) {
-            $_REQUEST['user_token'] = $params['user_token'];
+            $_REQUEST['user_token'] = Sanitizer::dbEscape($params['user_token']);
             $noAuto = false;
         } else if (!$CFG_GLPI['enable_api_login_credentials']) {
             $this->returnError(
@@ -297,7 +299,7 @@ abstract class API
 
        // login on glpi
         if (!$auth->login($params['login'], $params['password'], $noAuto, false, $params['auth'])) {
-            $err = Toolbox::stripTags($auth->getErr());
+            $err = implode(' ', $auth->getErrors());
             if (
                 isset($params['user_token'])
                 && !empty($params['user_token'])
@@ -329,8 +331,6 @@ abstract class API
      */
     protected function killSession()
     {
-
-        $this->initEndpoint(false, __FUNCTION__);
         Session::destroy();
         return true;
     }
@@ -377,9 +377,6 @@ abstract class API
      */
     protected function changeActiveEntities($params = [])
     {
-
-        $this->initEndpoint();
-
         if (!isset($params['entities_id'])) {
             $entities_id = 'all';
         } else {
@@ -410,9 +407,6 @@ abstract class API
      */
     protected function getMyEntities($params = [])
     {
-
-        $this->initEndpoint();
-
         if (!isset($params['is_recursive'])) {
             $params['is_recursive'] = false;
         }
@@ -455,9 +449,6 @@ abstract class API
      */
     protected function getActiveEntities()
     {
-
-        $this->initEndpoint();
-
         $actives_entities = [];
         foreach (array_values($_SESSION['glpiactiveentities']) as $active_entity) {
             $actives_entities[] = ['id' => $active_entity];
@@ -484,9 +475,6 @@ abstract class API
      */
     protected function changeActiveProfile($params = [])
     {
-
-        $this->initEndpoint();
-
         if (!isset($params['profiles_id'])) {
             $this->returnError();
         }
@@ -510,9 +498,6 @@ abstract class API
      */
     protected function getMyProfiles()
     {
-
-        $this->initEndpoint();
-
         $myprofiles = [];
         foreach ($_SESSION['glpiprofiles'] as $profiles_id => $profile) {
            // append if of the profile into values
@@ -537,8 +522,6 @@ abstract class API
      */
     protected function getActiveProfile()
     {
-
-        $this->initEndpoint();
         return ["active_profile" => $_SESSION['glpiactiveprofile']];
     }
 
@@ -552,8 +535,6 @@ abstract class API
      */
     protected function getFullSession()
     {
-
-        $this->initEndpoint();
         return ['session' => $_SESSION];
     }
 
@@ -566,8 +547,6 @@ abstract class API
      */
     protected function getGlpiConfig()
     {
-        $this->initEndpoint();
-
         return ['cfg_glpi' => Config::getSafeConfig()];
     }
 
@@ -602,7 +581,6 @@ abstract class API
     {
         global $CFG_GLPI, $DB;
 
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
        // default params
@@ -839,8 +817,8 @@ abstract class API
                         ],
                         'glpi_entities'   => [
                             'ON' => [
-                                'glpi_contracts_items'  => 'entities_id',
-                                'glpi_entities'         => 'id'
+                                'glpi_contracts'    => 'entities_id',
+                                'glpi_entities'     => 'id'
                             ]
                         ]
                     ],
@@ -1049,6 +1027,14 @@ abstract class API
             );
         }
 
+        // Decode HTML
+        if (!$this->returnSanitizedContent()) {
+            $fields = array_map(
+                fn ($f) => is_string($f) ? Sanitizer::decodeHtmlSpecialChars($f) : $f,
+                $fields
+            );
+        }
+
         return $fields;
     }
 
@@ -1079,7 +1065,7 @@ abstract class API
      * - 'expand_dropdowns' (default: false): show dropdown's names instead of id. Optionnal
      * - 'get_hateoas'      (default: true): show relations of items in a links attribute. Optionnal
      * - 'only_id'          (default: false): keep only id in fields list. Optionnal
-     * - 'range'            (default: 0-50): limit the list to start-end attributes
+     * - 'range'            (default: 0-49): limit the list to start-end attributes
      * - 'sort'             (default: id): sort by the field.
      * - 'order'            (default: ASC): ASC(ending) or DESC(ending).
      * - 'searchText'       (default: NULL): array of filters to pass on the query (with key = field and value the search)
@@ -1096,14 +1082,13 @@ abstract class API
     {
         global $DB;
 
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
-       // default params
+        // default params
         $default = ['expand_dropdowns' => false,
             'get_hateoas'       => true,
             'only_id'           => false,
-            'range'             => "0-" . $_SESSION['glpilist_limit'],
+            'range'             => "0-" . ($_SESSION['glpilist_limit'] - 1),
             'sort'              => "id",
             'order'             => "ASC",
             'searchText'        => null,
@@ -1122,21 +1107,17 @@ abstract class API
         $item->getEmpty();
         $table = getTableForItemType($itemtype);
 
-       // transform range parameter in start and limit variables
-        if (isset($params['range']) > 0) {
-            if (preg_match("/^[0-9]+-[0-9]+\$/", $params['range'])) {
-                $range = explode("-", $params['range']);
-                $params['start']      = $range[0];
-                $params['list_limit'] = $range[1] - $range[0] + 1;
-                $params['range']      = $range;
-            } else {
-                $this->returnError("range must be in format : [start-end] with integers");
-            }
+        // transform range parameter in start and limit variables
+        if (preg_match("/^[0-9]+-[0-9]+\$/", $params['range'])) {
+            $range = explode("-", $params['range']);
+            $params['start']      = $range[0];
+            $params['list_limit'] = $range[1] - $range[0] + 1;
+            $params['range']      = $range;
         } else {
-            $params['range'] = [0, $_SESSION['glpilist_limit']];
+            $this->returnError("range must be in format : [start-end] with integers");
         }
 
-       // check parameters
+        // check parameters
         if (
             isset($params['order'])
             && !in_array(strtoupper($params['order']), ['DESC', 'ASC'])
@@ -1322,6 +1303,14 @@ abstract class API
                     ];
                 }
             }
+
+            // Decode HTML
+            if (!$this->returnSanitizedContent()) {
+                $fields = array_map(
+                    fn ($f) => is_string($f) ? Sanitizer::decodeHtmlSpecialChars($f) : $f,
+                    $fields
+                );
+            }
         }
        // Break reference
         unset($fields);
@@ -1404,8 +1393,6 @@ abstract class API
         $params = [],
         bool $check_depreciation = true
     ) {
-        $this->initEndpoint();
-
         if ($check_depreciation) {
             $itemtype = $this->handleDepreciation($itemtype);
         }
@@ -1554,7 +1541,7 @@ abstract class API
      *            - value : value to search.
      *    - 'sort' :  id of searchoption to sort by (default 1). Optionnal.
      *    - 'order' : ASC - Ascending sort / DESC Descending sort (default ASC). Optionnal.
-     *    - 'range' : a string with a couple of number for start and end of pagination separated by a '-'. Ex : 150-200. (default 0-50)
+     *    - 'range' : a string with a couple of number for start and end of pagination separated by a '-'. Ex : 150-199. (default 0-49)
      *                Optionnal.
      *    - 'forcedisplay': array of columns to display (default empty = empty use display pref and search criterias).
      *                      Some columns will be always presents (1-id, 2-name, 80-Entity).
@@ -1567,7 +1554,6 @@ abstract class API
     {
         global $DEBUG_SQL;
 
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
        // check rights
@@ -1653,7 +1639,7 @@ abstract class API
         }
 
        // transform range parameter in start and limit variables
-        if (isset($params['range']) > 0) {
+        if (isset($params['range'])) {
             if (preg_match("/^[0-9]+-[0-9]+\$/", $params['range'])) {
                 $range = explode("-", $params['range']);
                 $params['start']      = $range[0];
@@ -1663,7 +1649,7 @@ abstract class API
                 $this->returnError("range must be in format : [start-end] with integers");
             }
         } else {
-            $params['range'] = [0, $_SESSION['glpilist_limit']];
+            $params['range'] = [0, $_SESSION['glpilist_limit'] - 1];
         }
 
        // force reset
@@ -1711,7 +1697,12 @@ abstract class API
             $cleaned_cols[] = $col['id'];
             if (isset($params['uid_cols'])) {
                // prepare cols with uid
-                $uid_cols[] = $soptions[$col['id']]['uid'];
+                if (isset($col['meta']) && $col['meta']) {
+                    $meta_opts = $this->listSearchOptions($col['itemtype'], [], false);
+                    $uid_cols[] = $meta_opts[$col['id']]['uid'];
+                } else {
+                    $uid_cols[] = $soptions[$col['id']]['uid'];
+                }
             }
         }
 
@@ -1811,7 +1802,6 @@ abstract class API
      */
     protected function createItems($itemtype, $params = [])
     {
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
         $input    = isset($params['input']) ? $params["input"] : null;
@@ -1860,8 +1850,15 @@ abstract class API
                     if ($new_id === false) {
                         $failed++;
                     }
+
+                    $message = $this->getGlpiLastMessage();
+                    if (!$this->returnSanitizedContent()) {
+                        // Message may contains the created item name, which may
+                        // contains some encoded html
+                        $message = Sanitizer::decodeHtmlSpecialChars($message);
+                    }
                     $current_res = ['id'      => $new_id,
-                        'message' => $this->getGlpiLastMessage()
+                        'message' => $message
                     ];
                 }
 
@@ -1935,7 +1932,6 @@ abstract class API
      */
     protected function updateItems($itemtype, $params = [])
     {
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
         $input    = isset($params['input']) ? $params["input"] : null;
@@ -1990,7 +1986,7 @@ abstract class API
                         }
 
                      //update item
-                        $object = Sanitizer::sanitize((array)$object);
+                        $object = Sanitizer::sanitize($this->inputObjectToArray($object));
                         $update_return = $item->update($object);
                         if ($update_return === false) {
                              $failed++;
@@ -2000,7 +1996,6 @@ abstract class API
                         ];
                     }
                 }
-
                // attach fileupload answer
                 if (
                     isset($params['upload_result'])
@@ -2050,8 +2045,6 @@ abstract class API
      */
     protected function deleteItems($itemtype, $params = [])
     {
-
-        $this->initEndpoint();
         $itemtype = $this->handleDepreciation($itemtype);
 
         $default  = ['force_purge' => false,
@@ -2215,7 +2208,7 @@ abstract class API
      *
      * @return void
      */
-    private function initEndpoint($unlock_session = true, $endpoint = "")
+    protected function initEndpoint($unlock_session = true, $endpoint = "")
     {
 
         if ($endpoint === "") {
@@ -2348,7 +2341,7 @@ abstract class API
     /**
      * Get last message added in $_SESSION by Session::addMessageAfterRedirect
      *
-     * @return array  of messages
+     * @return string Last message
      */
     private function getGlpiLastMessage()
     {
@@ -2377,7 +2370,7 @@ abstract class API
        // get sql errors
         if (
             count($all_messages) <= 0
-            && $DEBUG_SQL['errors'] !== null
+            && ($DEBUG_SQL['errors'] ?? null) !== null
         ) {
             $all_messages = $DEBUG_SQL['errors'];
         }
@@ -3058,9 +3051,7 @@ abstract class API
      */
     protected function userPicture($user_id)
     {
-        $this->initEndpoint();
-
-       // Try to load target user
+        // Try to load target user
         $user = new User();
         if (!$user->getFromDB($user_id)) {
             $this->returnError("Bad request: user with id '$user_id' not found");
@@ -3148,6 +3139,11 @@ abstract class API
             $actions = $this->getMassiveActionsForItem($item);
         }
 
+        if (count($actions) === 0) {
+            // An error occurred
+            return;
+        }
+
        // Build response array
         $response = [];
         foreach ($actions as $key => $label) {
@@ -3170,8 +3166,17 @@ abstract class API
         string $itemtype,
         bool $is_deleted = false
     ): array {
-       // Return massive actions for a given itemtype
-        return MassiveAction::getAllMassiveActions($itemtype, $is_deleted);
+        // Return massive actions for a given itemtype
+        $actions = MassiveAction::getAllMassiveActions($itemtype, $is_deleted);
+        if ($actions === false) {
+            $this->returnError(
+                "Unable to get massive actions for itemtype '$itemtype'. Please check that it is a valid itemtype.",
+                400,
+                "ERROR_MASSIVEACTION_NOT_FOUND"
+            );
+            return [];
+        }
+        return $actions;
     }
 
     /**
@@ -3183,12 +3188,21 @@ abstract class API
     public function getMassiveActionsForItem(CommonDBTM $item): array
     {
        // Return massive actions for a given item
-        return MassiveAction::getAllMassiveActions(
+        $actions = MassiveAction::getAllMassiveActions(
             $item::getType(),
             $item->isDeleted(),
             $item,
             $item->getID()
         );
+        if ($actions === false) {
+            $this->returnError(
+                "Unable to get massive actions for item of type '{$item::getType()}'. Please check that it is a valid itemtype.",
+                400,
+                "ERROR_MASSIVEACTION_NOT_FOUND"
+            );
+            return [];
+        }
+        return $actions;
     }
 
     /**
@@ -3221,6 +3235,15 @@ abstract class API
         }
 
         $actions = MassiveAction::getAllMassiveActions($itemtype, $is_deleted);
+        if ($actions === false) {
+            $this->returnError(
+                "Unable to get massive actions for itemtype '$itemtype'. Please check that it is a valid itemtype.",
+                400,
+                "ERROR_MASSIVEACTION_NOT_FOUND"
+            );
+            return;
+        }
+
         if (!isset($actions[$action_key])) {
             $this->returnError(
                 "Invalid action key parameter, run 'getMassiveActions' endpoint to see available keys",
@@ -3229,7 +3252,7 @@ abstract class API
             );
         }
 
-       // Get massive action for the given key
+        // Get massive action for the given key
         $ma = new MassiveAction([
             'action'     => $action_key,
             'actions'    => $actions,
@@ -3331,5 +3354,43 @@ abstract class API
         }
 
         $this->returnResponse($results, $code);
+    }
+
+    /**
+     * List of API ressources for which a valid session isn't required
+     *
+     * @return array
+     */
+    protected function getRessourcesAllowedWithoutSession(): array
+    {
+        return [
+            "initSession",
+            "lostPassword",
+        ];
+    }
+
+    /**
+     * List of API ressources that may write php session data
+     *
+     * @return array
+     */
+    protected function getRessourcesWithSessionWrite(): array
+    {
+        return [
+            "initSession",
+            "killSession",
+            "changeActiveEntities",
+            "changeActiveProfile",
+        ];
+    }
+
+    /**
+     * Will the API content be sanitized ?
+     *
+     * @return bool
+     */
+    public function returnSanitizedContent(): bool
+    {
+        return true;
     }
 }

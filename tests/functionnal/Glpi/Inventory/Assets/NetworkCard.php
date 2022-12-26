@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -750,6 +752,7 @@ class NetworkCard extends AbstractInventoryAsset
         $computer = new \Computer();
         $device_net = new \DeviceNetworkCard();
         $item_net = new \Item_DeviceNetworkCard();
+        $network_port = new \NetworkPort();
 
         $xml_source = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
 <REQUEST>
@@ -835,7 +838,8 @@ class NetworkCard extends AbstractInventoryAsset
         $item_card_1_id = $item_net->add([
             'items_id'     => $computers_id,
             'itemtype'     => 'Computer',
-            'devicenetworkcards_id' => $card_1_id
+            'devicenetworkcards_id' => $card_1_id,
+            'mac' => '08:00:27:16:9C:60'
         ]);
         $this->integer($item_card_1_id)->isGreaterThan(0);
 
@@ -850,7 +854,8 @@ class NetworkCard extends AbstractInventoryAsset
         $item_card_2_id = $item_net->add([
             'items_id'     => $computers_id,
             'itemtype'     => 'Computer',
-            'devicenetworkcards_id' => $card_2_id
+            'devicenetworkcards_id' => $card_2_id,
+            'mac' => '18:db:f2:29:99:35'
         ]);
         $this->integer($item_card_2_id)->isGreaterThan(0);
 
@@ -894,7 +899,15 @@ class NetworkCard extends AbstractInventoryAsset
         $cards = $item_net->find(['itemtype' => 'Computer', 'items_id' => $computers_id, 'is_dynamic' => 0]);
         $this->integer(count($cards))->isIdenticalTo(1);
 
+        $this->boolean(
+            $network_port->getFromDBByCrit(['mac' => '08:00:27:16:9c:60'])
+        )->isTrue();
+        // the port is up
+        $this->string($network_port->fields['ifinternalstatus'])->isEqualTo('1');
+        $this->string($network_port->fields['ifstatus'])->isEqualTo('1');
+
        //Redo inventory, but with removed last network card
+       //and the port on the first card is down
         $xml_source = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
 <REQUEST>
   <CONTENT>
@@ -916,7 +929,7 @@ class NetworkCard extends AbstractInventoryAsset
       <IPSUBNET>172.28.211.0</IPSUBNET>
       <MACADDR>08:00:27:16:9C:60</MACADDR>
       <PCIID>8086:100E:001E:8086</PCIID>
-      <SPEED>1000</SPEED>
+      <SPEED>-1</SPEED>
       <STATUS>Up</STATUS>
       <VIRTUALDEV>0</VIRTUALDEV>
     </NETWORKS>
@@ -949,5 +962,13 @@ class NetworkCard extends AbstractInventoryAsset
        //network card not present in the inventory is still not dynamic
         $cards = $item_net->find(['itemtype' => 'Computer', 'items_id' => $computers_id, 'is_dynamic' => 0]);
         $this->integer(count($cards))->isIdenticalTo(1);
+
+        $this->boolean(
+            $network_port->getFromDBByCrit(['mac' => '08:00:27:16:9c:60'])
+        )->isTrue();
+        // the port is up
+        $this->string($network_port->fields['ifinternalstatus'])->isEqualTo('1');
+        // but the connection is down
+        $this->string($network_port->fields['ifstatus'])->isEqualTo('2');
     }
 }

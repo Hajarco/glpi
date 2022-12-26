@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -114,7 +116,7 @@ class MassiveAction
      * Items remaining in current process.
      * @var array
      */
-    private $remainings = [];
+    private $remainings = null;
 
     /**
      * Fields to remove after reload.
@@ -401,7 +403,9 @@ class MassiveAction
 
        // Add process elements
         if ($stage == 'process') {
-            $this->remainings = $this->items;
+            if (!isset($this->remainings)) {
+                $this->remainings = $this->items;
+            }
 
             $this->fields_to_remove_when_reload = ['fields_to_remove_when_reload'];
 
@@ -470,7 +474,6 @@ class MassiveAction
     public function __set(string $property, $value)
     {
         // TODO Deprecate access to variables in GLPI 10.1.
-        $value = null;
         switch ($property) {
             case 'display_progress_bars':
                 $this->$property = $value;
@@ -567,7 +570,7 @@ class MassiveAction
      **/
     public function getRemainings()
     {
-        return $this->remainings;
+        return $this->remainings ?? [];
     }
 
 
@@ -710,7 +713,7 @@ class MassiveAction
      * @param CommonDBTM        $checkitem   link item to check right              (default NULL)
      * @param int|null          $items_id    Get actions for a single item
      *
-     * @return array of massive actions or false if $item is not valid
+     * @return array|false Array of massive actions or false if $item is not valid
      **/
     public static function getAllMassiveActions($item, $is_deleted = 0, CommonDBTM $checkitem = null, ?int $items_id = null)
     {
@@ -731,10 +734,12 @@ class MassiveAction
             $canupdate = $checkitem->canUpdate();
             $candelete = $checkitem->canDelete();
             $canpurge  = $checkitem->canPurge();
+            $cancreate = $checkitem->canCreate();
         } else {
             $canupdate = $itemtype::canUpdate();
             $candelete = $itemtype::canDelete();
             $canpurge  = $itemtype::canPurge();
+            $cancreate = $itemtype::canCreate();
         }
 
         $actions   = [];
@@ -763,7 +768,7 @@ class MassiveAction
                //TRANS: select action 'update' (before doing it)
                 $actions[$self_pref . 'update'] = _x('button', 'Update');
 
-                if (Toolbox::hasTrait($itemtype, Clonable::class)) {
+                if ($cancreate && Toolbox::hasTrait($itemtype, Clonable::class)) {
                     $actions[$self_pref . 'clone'] = "<i class='fa-fw far fa-clone'></i>" . _x('button', 'Clone');
                 }
             }
@@ -924,7 +929,7 @@ class MassiveAction
 
     public static function showMassiveActionsSubForm(MassiveAction $ma)
     {
-        global $CFG_GLPI;
+        global $CFG_GLPI, $DB;
 
         switch ($ma->getAction()) {
             case 'update':
@@ -1197,12 +1202,14 @@ class MassiveAction
                             $search['condition'][] = 'is_problem';
                             break;
                         case 'Ticket':
-                            $search['condition'][] = [
-                                'OR' => [
-                                    'is_incident',
-                                    'is_request'
-                                ]
-                            ];
+                            if ($DB->fieldExists($search['table'], 'is_incident') || $DB->fieldExists($search['table'], 'is_request')) {
+                                $search['condition'][] = [
+                                    'OR' => [
+                                        'is_incident',
+                                        'is_request'
+                                    ]
+                                ];
+                            }
                             break;
                     }
                     if (isset($ma->POST['additionalvalues'])) {
@@ -1390,7 +1397,7 @@ class MassiveAction
 
     /**
      * Process the specific massive actions for severl itemtypes
-     * @return array of the results for the actions
+     * @return void
      **/
     public function processForSeveralItemtypes()
     {

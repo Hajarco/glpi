@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -300,6 +302,7 @@ class Plugins
      * @param int    $page which page to query
      * @param int    $nb_per_page how manyu per page we want
      * @param string $sort sort-alpha-asc|sort-alpha-desc|sort-dl|sort-update|sort-added|sort-note
+     * @param int    $total Total count of plugin found with given filters
      *
      * @return array full collection
      */
@@ -309,9 +312,12 @@ class Plugins
         string $string_filter = "",
         int $page = 1,
         int $nb_per_page = 15,
-        string $sort = 'sort-alpha-asc'
+        string $sort = 'sort-alpha-asc',
+        int &$total = 0
     ) {
         $plugins = $this->getAllPlugins($force_refresh, $tag_filter, $string_filter, $sort);
+
+        $total = count($plugins);
 
         $plugins_page = array_splice($plugins, max($page - 1, 0) * $nb_per_page, $nb_per_page);
         return $plugins_page;

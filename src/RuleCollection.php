@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -631,17 +633,17 @@ JAVASCRIPT;
         echo "<div class='spaced center'>";
 
         if ($plugin = isPluginItemType($this->getType())) {
-            $url = $CFG_GLPI["root_doc"] . "/plugins/" . strtolower($plugin['plugin']);
+            $url = Plugin::getWebDir($plugin['plugin']);
         } else {
             $url = $CFG_GLPI["root_doc"];
         }
 
        //if rules provides an initRules method, then we're able to reset them
         if (method_exists($this->getRuleClass(), 'initRules')) {
-            echo "<a class='btn btn-primary' id='reset_rules' href='" . $rule->getSearchURL() . "?reinit=true' " .
-            //does not work.
-            //"onClick='if(confirm(\"" . __s('All rules will be erased and recreated from scratch. Are you sure?')."\")) { return true } else { return false; };' " .
-            "title='" . __s("Remove all equipment import rules and recreate from defaults") . "'" .
+            echo "<a class='btn btn-primary' id='reset_rules' href='" . $rule->getSearchURL() . "?reinit=true&subtype=" . $this->getRuleClassName() . "' " .
+            "onClick='if(confirm(\"" . __s('Rules will be erased and recreated from default. Are you sure?') . "\"))
+            { return true } else { return false; };' " .
+            "title='" . __s("Delete all rules and recreate them by default") . "'" .
             ">" . __('Reset rules') . "</a>&nbsp;";
         }
         echo "<a class='btn btn-primary' href='#' data-bs-toggle='modal' data-bs-target='#allruletest$rand'>" .
@@ -2351,6 +2353,10 @@ JAVASCRIPT;
                         'label'  => OperatingSystemArchitecture::getTypeName(Session::getPluralNumber()),
                         'link'   => 'ruledictionnaryoperatingsystemarchitecture.php',
                         'icon'   => OperatingSystemArchitecture::getIcon(),
+                    ], [
+                        'label'  => OperatingSystemEdition::getTypeName(Session::getPluralNumber()),
+                        'link'   => 'ruledictionnaryoperatingsystemedition.php',
+                        'icon'   => OperatingSystemEdition::getIcon(),
                     ]
                 ]
             ];

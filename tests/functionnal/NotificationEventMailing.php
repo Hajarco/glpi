@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -87,13 +89,19 @@ class NotificationEventMailing extends DbTestCase
          ]);
 
         $CFG_GLPI['admin_email'] = 'adminlocalhost';
-        $this->boolean(\NotificationEventMailing::getAdminData())->isFalse();
+
+        $this->when(
+            function () {
+                $this->boolean(\NotificationEventMailing::getAdminData())->isFalse();
+            }
+        )->error
+         ->withType(E_USER_WARNING)
+         ->withMessage('Invalid email address "adminlocalhost" configured in "admin_email".')
+         ->exists();
     }
 
     public function testGetEntityAdminsData()
     {
-        $this->boolean(\NotificationEventMailing::getEntityAdminsData(0))->isFalse();
-
         $this->login();
 
         $entity1 = getItemByTypeName('Entity', '_test_child_1');
@@ -105,6 +113,8 @@ class NotificationEventMailing extends DbTestCase
             ])
         )->isTrue();
 
+        $sub_entity1 = $this->createItem(\Entity::class, ['name' => 'sub entity', 'entities_id' => $entity1->getId()]);
+
         $entity2 = getItemByTypeName('Entity', '_test_child_2');
         $this->boolean(
             $entity2->update([
@@ -114,30 +124,31 @@ class NotificationEventMailing extends DbTestCase
             ])
         )->isTrue();
 
-        $this->array(\NotificationEventMailing::getEntityAdminsData($entity1->getID()))
-         ->isIdenticalTo([
-             [
-                 'language' => 'en_GB',
-                 'email' => 'entadmin@localhost',
-                 'name' => 'Entity admin ONE'
-             ]
-         ]);
-        $this->boolean(\NotificationEventMailing::getEntityAdminsData($entity2->getID()))->isFalse();
+        $entity0_result = [
+            [
+                'name'     => '',
+                'email'    => 'admsys@localhost',
+                'language' => 'en_GB',
+            ]
+        ];
+        $this->array(\NotificationEventMailing::getEntityAdminsData(0))->isEqualTo($entity0_result);
+        $entity1_result = [
+            [
+                'name'     => 'Entity admin ONE',
+                'email'    => 'entadmin@localhost',
+                'language' => 'en_GB',
+            ]
+        ];
+        $this->array(\NotificationEventMailing::getEntityAdminsData($entity1->getID()))->isEqualTo($entity1_result);
+        $this->array(\NotificationEventMailing::getEntityAdminsData($sub_entity1->getID()))->isEqualTo($entity1_result);
 
-       //reset
-        $this->boolean(
-            $entity1->update([
-                'id'                 => $entity1->getId(),
-                'admin_email'        => 'NULL',
-                'admin_email_name'   => 'NULL'
-            ])
-        )->isTrue();
-        $this->boolean(
-            $entity2->update([
-                'id'                 => $entity2->getId(),
-                'admin_email'        => 'NULL',
-                'admin_email_name'   => 'NULL'
-            ])
-        )->isTrue();
+        $this->when(
+            function () use ($entity2, $entity0_result) {
+                $this->array(\NotificationEventMailing::getEntityAdminsData($entity2->getID()))->isEqualTo($entity0_result);
+            }
+        )->error
+         ->withType(E_USER_WARNING)
+         ->withMessage('Invalid email address "entadmin2localhost" configured for entity "' . $entity2->getID() . '". Default administrator email will be used.')
+         ->exists();
     }
 }

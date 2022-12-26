@@ -2,13 +2,15 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2010-2022 by the FusionInventory Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +18,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -45,11 +48,6 @@ class NetworkCard extends Device
 
     protected $extra_data = ['controllers' => null];
     protected $ignored = ['controllers' => null];
-
-    public function __construct(CommonDBTM $item, array $data = null)
-    {
-        parent::__construct($item, $data, 'Item_DeviceNetworkCard');
-    }
 
     public function prepare(): array
     {
@@ -87,6 +85,26 @@ class NetworkCard extends Device
             foreach ($mapping as $origin => $dest) {
                 if (property_exists($val, $origin)) {
                     $val->$dest = $val->$origin;
+                }
+            }
+
+            if (property_exists($val, 'status')) {
+                switch ($val->status) {
+                    case 'up':
+                        $val_port->ifinternalstatus = '1';
+                        break;
+                    case 'down':
+                        $val_port->ifinternalstatus = '2';
+                        break;
+                    default:
+                        $val_port->ifinternalstatus = null;
+                }
+            }
+            if (property_exists($val, 'speed')) {
+                if ((int)$val->speed > 0) {
+                    $val_port->ifstatus = '1';  //up
+                } else {
+                    $val_port->ifstatus = '2';  //down
                 }
             }
 
@@ -261,5 +279,10 @@ class NetworkCard extends Device
     {
        //ports are handled from main asset in NetworkCard case
         return;
+    }
+
+    public function getItemtype(): string
+    {
+        return \Item_DeviceNetworkCard::class;
     }
 }

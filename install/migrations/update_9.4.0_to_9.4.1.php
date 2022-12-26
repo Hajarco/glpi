@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -47,39 +49,42 @@ function update940to941()
     $migration->setVersion('9.4.1');
 
     /** Add a search option for profile id */
-    $migration->addPostQuery($DB->buildUpdate(
-        'glpi_displaypreferences',
-        [
-            'num' => '5'
-        ],
-        [
-            'num' => '2',
-            'itemtype' => 'Profile'
-        ]
-    ));
-
-   // Manually add using addPostQuery to be sure it will be added before num 2->5 update request
-    $rank_result = $DB->request(
-        [
-            'SELECT' => ['MAX' => 'rank AS maxrank'],
-            'FROM'   => 'glpi_displaypreferences',
-            'WHERE'  => [
-                'itemtype'  => 'Profile',
-                'users_id'  => '0',
-            ]
-        ]
-    )->current();
-    $migration->addPostQuery(
-        $DB->buildInsert(
+    if (countElementsInTable('glpi_displaypreferences', ['num' => '2', 'itemtype' => 'Profile'])) {
+        // First, update SO ID of 'interface' field display preference
+        $migration->addPostQuery($DB->buildUpdate(
             'glpi_displaypreferences',
             [
-                'num'      => '2',
-                'itemtype' => 'Profile',
-                'users_id' => '0',
-                'rank'     => $rank_result['maxrank'] + 1,
+                'num' => '5'
+            ],
+            [
+                'num' => '2',
+                'itemtype' => 'Profile'
             ]
-        )
-    );
+        ));
+
+        // Then add 'id' field display preference
+        $rank_result = $DB->request(
+            [
+                'SELECT' => ['MAX' => 'rank AS maxrank'],
+                'FROM'   => 'glpi_displaypreferences',
+                'WHERE'  => [
+                    'itemtype'  => 'Profile',
+                    'users_id'  => '0',
+                ]
+            ]
+        )->current();
+        $migration->addPostQuery(
+            $DB->buildInsert(
+                'glpi_displaypreferences',
+                [
+                    'num'      => '2',
+                    'itemtype' => 'Profile',
+                    'users_id' => '0',
+                    'rank'     => $rank_result['maxrank'] + 1,
+                ]
+            )
+        );
+    }
     /** /Add a search option for profile id */
 
     /** Fix URL of images inside ITIL objects contents */

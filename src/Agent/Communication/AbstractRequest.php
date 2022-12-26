@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -159,6 +161,33 @@ abstract class AbstractRequest
     }
 
     /**
+     * Display module name
+     *
+     * @param string $internalModule
+     * @return string readable method name
+     */
+    public static function getModuleName(?string $internalModule): string
+    {
+        switch ($internalModule) {
+            case self::INVENT_QUERY:
+            case self::INVENT_ACTION:
+                return __("Inventory");
+                break;
+            case self::OLD_SNMP_QUERY:
+            case self::SNMP_QUERY:
+            case self::NETINV_ACTION:
+                return __("Network inventory (SNMP)");
+                break;
+            case self::NETDISCOVERY_ACTION:
+                return __("Network discovery (SNMP)");
+                break;
+            default:
+                return $internalModule ?? '';
+                break;
+        }
+    }
+
+    /**
      * Handle request headers
      *
      * @param $data
@@ -213,7 +242,14 @@ abstract class AbstractRequest
                     $data = gzdecode($data);
                     break;
                 case self::COMPRESS_BR:
-                    $data = brotli_uncompress($data);
+                    if (!function_exists('brotli_uncompress')) {
+                        trigger_error(
+                            'Brotli PHP extension is required to handle Brotli compression algorithm in inventory feature.',
+                            E_USER_WARNING
+                        );
+                    } else {
+                        $data = brotli_uncompress($data);
+                    }
                     break;
                 case self::COMPRESS_DEFLATE:
                     $data = gzinflate($data);
@@ -269,7 +305,7 @@ abstract class AbstractRequest
         libxml_use_internal_errors(true);
 
         if (mb_detect_encoding($data, 'UTF-8', true) === false) {
-            $data = utf8_encode($data);
+            $data = iconv('ISO-8859-1', 'UTF-8', $data);
         }
         $xml = simplexml_load_string($data, 'SimpleXMLElement', LIBXML_NOCDATA);
         if (!$xml) {
@@ -305,12 +341,12 @@ abstract class AbstractRequest
      */
     public function handleJSONRequest($data): bool
     {
-        $jdata = json_decode($data);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        if (!\Toolbox::isJSON($data)) {
             $this->addError('JSON not well formed!', 400);
             return false;
         }
+
+        $jdata = json_decode($data);
 
         $this->deviceid = $jdata->deviceid ?? null;
         $action = self::INVENT_ACTION;
@@ -355,7 +391,15 @@ abstract class AbstractRequest
                     'expiration' => self::DEFAULT_FREQUENCY
                 ]);
             } else {
-                $this->addToResponse(['ERROR' => \Html::resume_text($message, 250)]);
+                $message = \Html::resume_text($message, 250);
+
+                $this->addToResponse([
+                    'ERROR' => [
+                        'content'    => $message,
+                        'attributes' => [],
+                        'type'       => XML_CDATA_SECTION_NODE,
+                    ]
+                ]);
             }
         }
     }
@@ -406,16 +450,25 @@ abstract class AbstractRequest
                 $this->addNode($node, $sname, $scontent);
             }
         } else {
+            $type = $content['type'] ?? null;
             $attributes = [];
             if (is_array($content) && isset($content['content']) && isset($content['attributes'])) {
                 $attributes = $content['attributes'];
                 $content = $content['content'];
             }
 
-            $new_node = $this->response->createElement(
-                $name,
-                $content
-            );
+            if ($type == XML_CDATA_SECTION_NODE) {
+                // Handle CDATA sections
+                $new_node = $this->response->createElement($name);
+                $cdata = $this->response->createCDATASection($content);
+                $new_node->appendChild($cdata);
+            } else {
+                // Normal sections
+                $new_node = $this->response->createElement(
+                    $name,
+                    $content
+                );
+            }
 
             if (count($attributes)) {
                 foreach ($attributes as $aname => $avalue) {
@@ -480,7 +533,7 @@ abstract class AbstractRequest
 
             switch ($this->mode) {
                 case self::XML_MODE:
-                    $data = $this->response->saveXML();
+                    $data = trim($this->response->saveXML());
                     break;
                 case self::JSON_MODE:
                     $data = json_encode($this->response);
@@ -502,7 +555,14 @@ abstract class AbstractRequest
                         $data = gzencode($data);
                         break;
                     case self::COMPRESS_BR:
-                        $data = brotli_compress($data);
+                        if (!function_exists('brotli_compress')) {
+                            trigger_error(
+                                'Brotli PHP extension is required to handle Brotli compression algorithm in inventory feature.',
+                                E_USER_WARNING
+                            );
+                        } else {
+                            $data = brotli_compress($data);
+                        }
                         break;
                     case self::COMPRESS_DEFLATE:
                         $data = gzdeflate($data);
@@ -634,5 +694,25 @@ abstract class AbstractRequest
     public function getDeviceID(): string
     {
         return $this->deviceid;
+    }
+
+    /**
+     * Handle GLPI framework messages
+     *
+     * @return void
+     */
+    public function handleMessages(): void
+    {
+        if (count($_SESSION['MESSAGE_AFTER_REDIRECT'])) {
+            $messages = $_SESSION['MESSAGE_AFTER_REDIRECT'];
+            $_SESSION['MESSAGE_AFTER_REDIRECT'] = [];
+            foreach ($messages as $code => $all_messages) {
+                if ($code != INFO) {
+                    foreach ($all_messages as $message) {
+                        $this->addError($message, 500);
+                    }
+                }
+            }
+        }
     }
 }

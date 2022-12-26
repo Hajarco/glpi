@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,25 +17,28 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 use Glpi\Console\Application;
 use Glpi\Event;
 use Glpi\Mail\Protocol\ProtocolInterface;
+use Glpi\Rules\RulesManager;
 use Glpi\Toolbox\Sanitizer;
+use Glpi\Toolbox\VersionParser;
 use Laminas\Mail\Storage\AbstractStorage;
 use Mexitek\PHPColors\Color;
 use Monolog\Logger;
@@ -308,13 +312,38 @@ class Toolbox
      */
     public static function getHtmLawedSafeConfig(): array
     {
+        $forbidden_elements = [
+            'script',
+
+            // header elements used to link external resources
+            'link',
+            'meta',
+
+            // elements used to embed potential malicious external application
+            'applet',
+            'canvas',
+            'embed',
+            'object',
+
+            // form elements
+            'form',
+            'button',
+            'input',
+            'select',
+            'datalist',
+            'option',
+            'optgroup',
+            'textarea',
+        ];
+
         $config = [
-            'elements'         => '* -applet -canvas -embed -form -object -script',
-            'deny_attribute'   => 'on*, srcdoc',
-            'comment'          => 1, // 1: remove HTML comments (and do not display their contents)
-            'cdata'            => 1, // 1: remove CDATA sections (and do not display their contents)
-            'direct_list_nest' => 1, // 1: Allow usage of ul/ol tags nested in other ul/ol tags
-            'schemes'          => '*: aim, app, feed, file, ftp, gopher, http, https, irc, mailto, news, nntp, sftp, ssh, tel, telnet, notes'
+            'elements'           => '* ' . implode('', array_map(fn($element) => '-' . $element, $forbidden_elements)),
+            'deny_attribute'     => 'on*, srcdoc, formaction',
+            'comment'            => 1, // 1: remove HTML comments (and do not display their contents)
+            'cdata'              => 1, // 1: remove CDATA sections (and do not display their contents)
+            'direct_list_nest'   => 1, // 1: Allow usage of ul/ol tags nested in other ul/ol tags
+            'schemes'            => 'href: aim, app, feed, file, ftp, gopher, http, https, irc, mailto, news, nntp, sftp, ssh, tel, telnet, notes; *: file, http, https',
+            'no_deprecated_attr' => 0, // 0: do not transform deprecated HTML attributes
         ];
         if (!GLPI_ALLOW_IFRAME_IN_RICH_TEXT) {
             $config['elements'] .= '-iframe';
@@ -682,12 +711,22 @@ class Toolbox
         $etag = md5_file($file);
         $lastModified = filemtime($file);
 
-       // Make sure there is nothing in the output buffer (In case stuff was added by core or misbehaving plugin).
-       // If there is any extra data, the sent file will be corrupted.
-        while (ob_get_level() > 0) {
+        // Make sure there is nothing in the output buffer (In case stuff was added by core or misbehaving plugin).
+        // If there is any extra data, the sent file will be corrupted.
+        // 1. Turn off any extra buffering level. Keep one buffering level if PHP output_buffering directive is not "off".
+        $ob_config = ini_get('output_buffering');
+        $max_buffering_level = $ob_config !== false && (strtolower($ob_config) === 'on' || (is_numeric($ob_config) && (int)$ob_config > 0))
+            ? 1
+            : 0;
+        while (ob_get_level() > $max_buffering_level) {
             ob_end_clean();
         }
-       // Now send the file with header() magic
+        // 2. Clean any buffered output in remaining level (output_buffering="on" case).
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+
+        // Now send the file with header() magic
         header("Last-Modified: " . gmdate("D, d M Y H:i:s", $lastModified) . " GMT");
         header("Etag: $etag");
         header_remove('Pragma');
@@ -698,7 +737,7 @@ class Toolbox
         }
         header(
             "Content-disposition:$attachment filename=\"" .
-            addslashes(utf8_decode($filename)) .
+            addslashes(mb_convert_encoding($filename, 'ISO-8859-1', 'UTF-8')) .
             "\"; filename*=utf-8''" .
             rawurlencode($filename)
         );
@@ -1090,6 +1129,10 @@ class Toolbox
        //parse github releases (get last version number)
         $error = "";
         $json_gh_releases = self::getURLContent("https://api.github.com/repos/glpi-project/glpi/releases", $error);
+        if (empty($json_gh_releases)) {
+            return $error;
+        }
+
         $all_gh_releases = json_decode($json_gh_releases, true);
         $released_tags = [];
         foreach ($all_gh_releases as $release) {
@@ -1326,6 +1369,35 @@ class Toolbox
 
 
     /**
+     * Check an url is safe.
+     * Used to mitigate SSRF exploits.
+     *
+     * @since 10.0.3
+     *
+     * @param string    $url        URL to check
+     * @param array     $allowlist  Allowlist (regex array)
+     *
+     * @return bool
+     */
+    public static function isUrlSafe(string $url, array $allowlist = GLPI_SERVERSIDE_URL_ALLOWLIST): bool
+    {
+        foreach ($allowlist as $allow_regex) {
+            $result = preg_match($allow_regex, $url);
+            if ($result === false) {
+                trigger_error(
+                    sprintf('Unable to validate URL safeness. Following regex is probably invalid: "%s".', $allow_regex),
+                    E_USER_WARNING
+                );
+            } elseif ($result === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    /**
      * Get a web page. Use proxy if configured
      *
      * @param string  $url    URL to retrieve
@@ -1336,7 +1408,8 @@ class Toolbox
      **/
     public static function getURLContent($url, &$msgerr = null, $rec = 0)
     {
-        $content = self::callCurl($url);
+        $curl_error = null;
+        $content = self::callCurl($url, [], $msgerr, $curl_error, true);
         return $content;
     }
 
@@ -1350,9 +1423,23 @@ class Toolbox
      *
      * @return string
      */
-    public static function callCurl($url, array $eopts = [], &$msgerr = null, &$curl_error = null)
-    {
+    public static function callCurl(
+        $url,
+        array $eopts = [],
+        &$msgerr = null,
+        &$curl_error = null,
+        bool $check_url_safeness = false
+    ) {
         global $CFG_GLPI;
+
+        if ($check_url_safeness && !Toolbox::isUrlSafe($url)) {
+            $msgerr = sprintf(
+                __('URL "%s" is not considered safe and cannot be fetched from GLPI server.'),
+                $url
+            );
+            trigger_error(sprintf('Unsafe URL "%s" fetching has been blocked.', $url), E_USER_NOTICE);
+            return '';
+        }
 
         $content = "";
         $taburl  = parse_url($url);
@@ -1374,6 +1461,10 @@ class Toolbox
             CURLOPT_RETURNTRANSFER  => 1,
             CURLOPT_CONNECTTIMEOUT  => 5,
         ] + $eopts;
+
+        if ($check_url_safeness) {
+            $opts[CURLOPT_FOLLOWLOCATION] = false;
+        }
 
         if (!empty($CFG_GLPI["proxy_name"])) {
            // Connection using proxy
@@ -1400,6 +1491,7 @@ class Toolbox
         curl_setopt_array($ch, $opts);
         $content = curl_exec($ch);
         $curl_error = curl_error($ch) ?: null;
+        $curl_redirect = curl_getinfo($ch, CURLINFO_REDIRECT_URL) ?: null;
         curl_close($ch);
 
         if ($curl_error !== null) {
@@ -1417,6 +1509,8 @@ class Toolbox
                 );
             }
             $content = '';
+        } else if ($curl_redirect !== null) {
+            return self::callCurl($curl_redirect, $eopts, $msgerr, $curl_error, $check_url_safeness);
         } else if (empty($content)) {
             $msgerr = __('No data available on the web site');
         }
@@ -2252,7 +2346,7 @@ class Toolbox
        // Set global $DB as it is used in "Config::setConfigurationValues()" just after schema creation
         $DB = $database;
 
-        if (!$DB->runFile(GLPI_ROOT . "/install/mysql/glpi-empty.sql")) {
+        if (!$DB->runFile(sprintf('%s/install/mysql/glpi-empty.sql', GLPI_ROOT))) {
             echo "Errors occurred inserting default database";
         } else {
            //dataset
@@ -2300,8 +2394,8 @@ class Toolbox
                 }
             }
 
-           //rules
-            RuleImportAsset::initRules();
+            // Initalize rules
+            RulesManager::initializeRules();
 
            // update default language
             Config::setConfigurationValues(
@@ -2583,7 +2677,7 @@ class Toolbox
      *
      * @return string                the $content_text param after parsing
      **/
-    public static function convertTagToImage($content_text, CommonDBTM $item, $doc_data = [])
+    public static function convertTagToImage($content_text, CommonDBTM $item, $doc_data = [], bool $add_link = true)
     {
         global $CFG_GLPI;
 
@@ -2597,6 +2691,15 @@ class Toolbox
         if (count($doc_data)) {
             $base_path = $CFG_GLPI['root_doc'];
 
+            $was_html_encoded = Sanitizer::isHtmlEncoded($content_text);
+            $was_escaped      = Sanitizer::isDbEscaped($content_text);
+            if ($was_html_encoded) {
+                $content_text = Sanitizer::decodeHtmlSpecialChars($content_text);
+            }
+            if ($was_escaped) {
+                $content_text = Sanitizer::dbUnescape($content_text);
+            }
+
             foreach ($doc_data as $id => $image) {
                 if (isset($image['tag'])) {
                    // Add only image files : try to detect mime type
@@ -2604,32 +2707,33 @@ class Toolbox
                         $document->getFromDB($id)
                         && strpos($document->fields['mime'], 'image/') !== false
                     ) {
-                        // append itil object reference in image link
-                        $itil_object = null;
-                        if ($item instanceof CommonITILObject) {
-                            $itil_object = $item;
-                        } else if (
-                            isset($item->input['_job'])
+                        // append object reference in image link
+                        $linked_object = null;
+                        if (
+                              !($item instanceof CommonITILObject)
+                              && isset($item->input['_job'])
                               && $item->input['_job'] instanceof CommonITILObject
                         ) {
-                            $itil_object = $item->input['_job'];
+                            $linked_object = $item->input['_job'];
+                        } else if ($item instanceof CommonDBTM) {
+                            $linked_object = $item;
                         }
-                        $itil_url_param = null !== $itil_object
-                        ? "&{$itil_object->getForeignKeyField()}={$itil_object->fields['id']}"
+                        $object_url_param = null !== $linked_object
+                        ? sprintf('&itemtype=%s&items_id=%s', $linked_object->getType(), $linked_object->fields['id'])
                         : "";
                         $img = "<img alt='" . $image['tag'] . "' src='" . $base_path .
-                          "/front/document.send.php?docid=" . $id . $itil_url_param . "'/>";
+                          "/front/document.send.php?docid=" . $id . $object_url_param . "'/>";
 
                       // 1 - Replace direct tag (with prefix and suffix) by the image
                         $content_text = preg_replace(
                             '/' . Document::getImageTag($image['tag']) . '/',
-                            Sanitizer::encodeHtmlSpecialChars($img),
+                            $img,
                             $content_text
                         );
 
                          // 2 - Replace img with tag in id attribute by the image
                         $regex = '/<img[^>]+' . preg_quote($image['tag'], '/') . '[^<]+>/im';
-                        preg_match_all($regex, Sanitizer::unsanitize($content_text), $matches);
+                        preg_match_all($regex, $content_text, $matches);
                         foreach ($matches[0] as $match_img) {
                             //retrieve dimensions
                             $width = $height = null;
@@ -2654,8 +2758,8 @@ class Toolbox
                                 $id,
                                 $width,
                                 $height,
-                                true,
-                                $itil_url_param
+                                $add_link,
+                                $object_url_param
                             );
                             if (empty($new_image)) {
                                   $new_image = '#' . $image['tag'] . '#';
@@ -2663,9 +2767,9 @@ class Toolbox
                             $content_text = str_replace(
                                 $match_img,
                                 $new_image,
-                                Sanitizer::unsanitize($content_text)
+                                $content_text
                             );
-                            $content_text = Sanitizer::encodeHtmlSpecialChars($content_text);
+                            $content_text = $content_text;
                         }
 
                         // If the tag is from another ticket : link document to ticket
@@ -2692,6 +2796,13 @@ class Toolbox
                         );
                     }
                 }
+            }
+
+            if ($was_html_encoded) {
+                $content_text = Sanitizer::encodeHtmlSpecialChars($content_text);
+            }
+            if ($was_escaped) {
+                $content_text = Sanitizer::dbEscape($content_text);
             }
         }
 
@@ -2737,18 +2848,85 @@ class Toolbox
             return $encoded;
         }
 
-        $json = json_decode($encoded, $assoc);
-
-        if (json_last_error() != JSON_ERROR_NONE) {
-           //something went wrong... Try to unsanitize before decoding.
-            $json = json_decode(Sanitizer::unsanitize($encoded), $assoc);
-            if (json_last_error() != JSON_ERROR_NONE) {
-                self::log(null, Logger::NOTICE, ['Unable to decode JSON string! Is this really JSON?']);
-                return $encoded;
+        $json_data = null;
+        if (self::isJSON($encoded)) {
+            $json_data = $encoded;
+        } else {
+            //something went wrong... Try to unsanitize before decoding.
+            $raw_encoded = Sanitizer::unsanitize($encoded);
+            if (self::isJSON($raw_encoded)) {
+                $json_data = $raw_encoded;
             }
         }
 
+        if ($json_data === null) {
+            self::log(null, Logger::NOTICE, ['Unable to decode JSON string! Is this really JSON?']);
+            return $encoded;
+        }
+
+        $json = json_decode($json_data, $assoc);
         return $json;
+    }
+
+
+    /**
+     * **Fast** JSON detection of a given var
+     * From https://stackoverflow.com/a/45241792
+     *
+     * @param mixed the var to test
+     *
+     * @return bool
+     */
+    public static function isJSON($json): bool
+    {
+        // Numeric strings are always valid JSON.
+        if (is_numeric($json)) {
+            return true;
+        }
+
+        // A non-string value can never be a JSON string.
+        if (!is_string($json)) {
+            return false;
+        }
+
+        $json = trim($json);
+        // Any non-numeric JSON string must be longer than 2 characters.
+        if (strlen($json) < 2) {
+            return false;
+        }
+
+        // "null" is valid JSON string.
+        if ('null' === $json) {
+            return true;
+        }
+
+        // "true" and "false" are valid JSON strings.
+        if ('true' === $json) {
+            return true;
+        }
+        if ('false' === $json) {
+            return false;
+        }
+
+        // Any other JSON string has to be wrapped in {}, [] or "".
+        if ('{' != $json[0] && '[' != $json[0] && '"' != $json[0]) {
+            return false;
+        }
+
+        // Verify that the trailing character matches the first character.
+        $last_char = $json[strlen($json) - 1];
+        if ('{' == $json[0] && '}' != $last_char) {
+            return false;
+        }
+        if ('[' == $json[0] && ']' != $last_char) {
+            return false;
+        }
+        if ('"' == $json[0] && '"' != $last_char) {
+            return false;
+        }
+
+        // See if the string contents are valid JSON.
+        return null !== json_decode($json);
     }
 
     /**
@@ -2826,13 +3004,6 @@ class Toolbox
                     2 => __('MM-DD-YYYY')
                 ];
                 break;
-            case 'gantt':
-                $formats = [
-                    0 => '%Y-%m-%d',
-                    1 => '%d-%m-%Y',
-                    2 => '%m-%d-%Y'
-                ];
-                break;
             default:
                 throw new \RuntimeException("Unknown type $type to get date formats.");
         }
@@ -2844,7 +3015,7 @@ class Toolbox
      *
      * @since 9.2
      *
-     * @param string $type Type for (either 'php', 'js' or 'gantt')
+     * @param string $type Type for (either 'php', 'js')
      *
      * @return string
      */
@@ -3494,11 +3665,11 @@ HTML;
             'to'  => 2,
             'tio' => 2,
         ];
-        $exp = $supported_sizes[strtolower($matches[2]) ?? null];
-        if ($exp === null) {
-            // Unkown format, keep the string as it is
-            return $size;
+        if (count($matches) >= 3 && isset($supported_sizes[strtolower($matches[2])])) {
+            // Known format
+            $size = $matches[1];
+            $size *= pow(1024, $supported_sizes[strtolower($matches[2])]);
         }
-        return $matches[1] * pow(1024, $exp);
+        return $size;
     }
 }

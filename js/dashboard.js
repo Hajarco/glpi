@@ -1,12 +1,13 @@
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -14,18 +15,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -102,7 +104,7 @@ var Dashboard = {
                 'cancel': 'textarea' // avoid draggable on some child elements
             },
             'minWidth': 768 -  width_offset, // breakpoint of one column mode (based on the dashboard container width), trying to reduce to match the `-md` breakpoint of bootstrap (this last is based on viewport width)
-        });
+        }, "#grid-stack-" + options.rand);
 
         // set grid in static to prevent edition (unless user click on edit button)
         // previously in option, but current version of gridstack has a bug with one column mode (responsive)
@@ -116,12 +118,7 @@ var Dashboard = {
         Dashboard.initFilters();
         Dashboard.refreshDashboard();
 
-        // retieve cards content by ajax
-        if (Dashboard.ajax_cards) {
-            Dashboard.getCardsAjax();
-        }
-
-        // animate the dashboards
+        // animate the dashboards once all card are loaded (single ajax mode)
         if (!Dashboard.ajax_cards) {
             Dashboard.fitNumbers();
             Dashboard.animateNumbers();
@@ -209,7 +206,11 @@ var Dashboard = {
             var active = $(this).hasClass('active');
 
             if (active) {
-                const seconds = parseInt(CFG_GLPI.refresh_views || 30) * 60;
+                var minutes = parseInt(CFG_GLPI.refresh_views);
+                if (minutes == 0 || Number.isNaN(minutes)) {
+                    minutes = 30;
+                }
+                var seconds = minutes * 60;
                 Dashboard.interval = setInterval(function() {
                     Dashboard.refreshDashboard();
                 }, seconds * 1000);
@@ -274,7 +275,7 @@ var Dashboard = {
 
             // resize also chart if exists
             var chart = $(elem).find('.ct-chart');
-            if (chart.length > 0)  {
+            if (chart.length > 0 && chart[0].__chartist__ != undefined)  {
                 chart[0].__chartist__.update();
             }
 
@@ -620,10 +621,7 @@ var Dashboard = {
             gridstack.find('.grid-stack-item').each(function() {
                 Dashboard.grid.makeWidget($(this)[0]);
             });
-
-            if (Dashboard.ajax_cards) {
-                Dashboard.getCardsAjax();
-            }
+            Dashboard.getCardsAjax();
         });
     },
 
@@ -785,7 +783,7 @@ var Dashboard = {
 
         parent_item
             .find('.big-number')
-            .find('.label').fitText(text_offset - 0.2);
+            .find('.label').fitText(text_offset - 0.2, { minFontSize: '12px'});
 
         // Remove temporary width
         this.resetComputedWidth(parent_item.find('.big-number').find('.formatted-number'));
@@ -800,10 +798,11 @@ var Dashboard = {
             .find('.multiple-numbers, .summary-numbers, .big-number')
             .find('.formatted-number')
             .each(function () {
-                var count     = $(this);
-                var precision = count.data('precision');
-                var number    = count.children('.number');
-                var suffix    = count.children('.suffix').text();
+                var count        = $(this);
+                var precision    = count.data('precision');
+                var number       = count.children('.number');
+                var suffix       = count.children('.suffix').text();
+                var targetNumber = number.text();
 
                 // Some custom formats may contain text in the number field, no animation in this case
                 if (isNaN(number.text())) {
@@ -815,6 +814,9 @@ var Dashboard = {
                     easing: 'swing',
                     step: function () {
                         number.text(this.Counter.toFixed(precision))+suffix;
+                    },
+                    complete: function () {
+                        number.text(targetNumber)+suffix;
                     }
                 });
             });
@@ -949,7 +951,8 @@ var Dashboard = {
     getCardsAjax: function(specific_one) {
         specific_one = specific_one || "";
 
-        var filters = Dashboard.getFiltersFromDB();
+        const filters = Dashboard.getFiltersFromDB();
+        const force = (specific_one.length > 0 ? 1 : 0);
 
         let requested_cards = [];
         let card_ajax_data = [];
@@ -971,53 +974,82 @@ var Dashboard = {
 
             card_ajax_data.push({
                 'card_id': card_id,
-                'force': (specific_one.length > 0 ? 1 : 0),
+                'force': force,
                 'args': card_opt,
                 'c_cache_key': card_opt.cache_key || ""
             });
             requested_cards.push({
                 'card_el': card,
-                'card_id': card_id
+                'card_id': card_id,
+                'args': card_opt,
             });
         });
 
-        return $.ajax({
-            url:CFG_GLPI.root_doc+"/ajax/dashboard.php",
-            method: 'POST',
-            data: {
-                'action': 'get_cards',
-                data: JSON.stringify({ //Preserve integers
-                    'dashboard': Dashboard.current_name,
-                    'force': (specific_one.length > 0 ? 1 : 0),
-                    'embed': (Dashboard.embed ? 1 : 0),
+        if (Dashboard.ajax_cards) {
+            // Multi ajax mode, spawn a request for each card
+            const promises = [];
+            requested_cards.forEach(function(requested_card) {
+                const card = requested_card.card_el;
+                promises.push($.get(CFG_GLPI.root_doc+"/ajax/dashboard.php", {
+                    'action':      'get_card',
+                    'dashboard':   Dashboard.current_name,
+                    'card_id':     requested_card.card_id,
+                    'force':       force,
+                    'embed':       (Dashboard.embed ? 1 : 0),
+                    'args':        requested_card.args,
                     'd_cache_key': Dashboard.cache_key,
-                    'cards': card_ajax_data
-                })
-            }
-        }).then(function(results) {
-            $.each(requested_cards, (i2, crd) => {
-                let has_result = false;
-                const card = crd.card_el;
-                $.each(results, (card_id, card_result) => {
-                    if (crd.card_id === card_id) {
-                        const html = card_result;
-                        has_result = true;
-                        card.children('.grid-stack-item-content').html(html);
+                    'c_cache_key': requested_card.args.cache_key || ""
+                }).then(function(html) {
+                    card.children('.grid-stack-item-content').html(html);
 
-                        Dashboard.fitNumbers(card);
-                        Dashboard.animateNumbers(card);
+                    Dashboard.fitNumbers(card);
+                    Dashboard.animateNumbers(card);
+                }).fail(function() {
+                    card.html("<div class='empty-card card-error'><i class='fas fa-exclamation-triangle'></i></div>");
+                }));
+            });
+
+            return promises;
+        } else {
+            // Single ajax mode, spawn a single request
+            return $.ajax({
+                url:CFG_GLPI.root_doc+"/ajax/dashboard.php",
+                method: 'POST',
+                data: {
+                    'action': 'get_cards',
+                    data: JSON.stringify({ //Preserve integers
+                        'dashboard': Dashboard.current_name,
+                        'force': (specific_one.length > 0 ? 1 : 0),
+                        'embed': (Dashboard.embed ? 1 : 0),
+                        'd_cache_key': Dashboard.cache_key,
+                        'cards': card_ajax_data
+                    })
+                }
+            }).then(function(results) {
+                $.each(requested_cards, (i2, crd) => {
+                    let has_result = false;
+                    const card = crd.card_el;
+                    $.each(results, (card_id, card_result) => {
+                        if (crd.card_id === card_id) {
+                            const html = card_result;
+                            has_result = true;
+                            card.children('.grid-stack-item-content').html(html);
+
+                            Dashboard.fitNumbers(card);
+                            Dashboard.animateNumbers(card);
+                        }
+                    });
+                    if (!has_result) {
+                        card.html("<div class='empty-card card-error'><i class='fas fa-exclamation-triangle'></i></div>");
                     }
                 });
-                if (!has_result) {
+            }).fail(function() {
+                $.each(requested_cards, (i2, crd) => {
+                    const card = crd.card_el;
                     card.html("<div class='empty-card card-error'><i class='fas fa-exclamation-triangle'></i></div>");
-                }
+                });
             });
-        }).fail(function() {
-            $.each(requested_cards, (i2, crd) => {
-                const card = crd.card_el;
-                card.html("<div class='empty-card card-error'><i class='fas fa-exclamation-triangle'></i></div>");
-            });
-        });
+        }
     },
 
     easter: function() {
@@ -1033,7 +1065,7 @@ var Dashboard = {
 
     generateCss: function() {
         var dash_width    = Math.floor(this.element.width());
-        var cell_length   = dash_width / this.cols;
+        var cell_length   = (dash_width - 1) / this.cols;
         var cell_height   = cell_length;
         var cell_fullsize = (dash_width / this.cols);
         var width_percent = 100 / this.cols;

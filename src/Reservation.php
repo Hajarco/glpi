@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -112,12 +114,6 @@ class Reservation extends CommonDBChild
      **/
     public function prepareInputForUpdate($input)
     {
-
-        $item = 0;
-        if (isset($input['_item'])) {
-            $item = $_POST['_item'];
-        }
-
        // Save fields
         $oldfields             = $this->fields;
        // Needed for test already planned
@@ -128,13 +124,7 @@ class Reservation extends CommonDBChild
             $this->fields["end"] = $input["end"];
         }
 
-        if (!$this->test_valid_date()) {
-            $this->displayError("date", $item);
-            return false;
-        }
-
-        if ($this->is_reserved()) {
-            $this->displayError("is_res", $item);
+        if (!$this->isReservationInputValid($input)) {
             return false;
         }
 
@@ -182,17 +172,41 @@ class Reservation extends CommonDBChild
         $this->fields["begin"]               = $input["begin"];
         $this->fields["end"]                 = $input["end"];
 
-        if (!$this->test_valid_date()) {
-            $this->displayError("date", $input["reservationitems_id"]);
-            return false;
-        }
-
-        if ($this->is_reserved()) {
-            $this->displayError("is_res", $input["reservationitems_id"]);
+        if (!$this->isReservationInputValid($input)) {
             return false;
         }
 
         return parent::prepareInputForAdd($input);
+    }
+
+    /**
+     * Check reservation input.
+     *
+     * @param array $input
+     *
+     * @return bool
+     */
+    private function isReservationInputValid(array $input): bool
+    {
+        if (!$this->test_valid_date()) {
+            Session::addMessageAfterRedirect(
+                __('Error in entering dates. The starting date is later than the ending date'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+
+        if ($this->is_reserved()) {
+            Session::addMessageAfterRedirect(
+                __('The required item is already reserved for this timeframe'),
+                false,
+                ERROR
+            );
+            return false;
+        }
+
+        return true;
     }
 
 
@@ -291,6 +305,8 @@ class Reservation extends CommonDBChild
      * @param $ID     ID of the item
      *
      * @return void
+     *
+     * @FIXME Deprecate/remove this method in GLPI 10.1.
      **/
     public function displayError($type, $ID)
     {
@@ -538,7 +554,7 @@ JAVASCRIPT;
 
             if ($canedit_admin || $my_item) {
                 $user->getFromDB($data['users_id']);
-                $username = $user->getFriendlyName();
+                $data['comment'] .= '<br />' . sprintf(__("Reserved by %s"), $user->getFriendlyName());
             }
 
             $name = $item->getName([
@@ -552,10 +568,7 @@ JAVASCRIPT;
                 'resourceId'  => $data['itemtype'] . "-" . $data['items_id'],
                 'start'       => $data['begin'],
                 'end'         => $data['end'],
-                'comment'     => $data['comment'] .
-                             $canedit_admin || $my_item
-                              ? "\n" . sprintf(__("Reserved by %s"), $username)
-                              : "",
+                'comment'     => $canedit_admin || $my_item ? $data['comment'] : '',
                 'title'       => $params['reservationitems_id'] ? "" : $name,
                 'icon'        => $item->getIcon(),
                 'description' => $item->getTypeName(),
@@ -585,8 +598,7 @@ JAVASCRIPT;
             ],
             'FROM'   => $res_i_table,
             'WHERE'  => [
-                'is_active'  => 1,
-                'is_deleted' => 0
+                'is_active'  => 1
             ]
         ]);
 
@@ -629,6 +641,8 @@ JAVASCRIPT;
         if (!$reservation->getFromDB((int) $event['id'])) {
             return false;
         }
+
+        $event = Planning::cleanDates($event);
 
         return $reservation->update([
             'id'    => (int) $event['id'],
@@ -673,6 +687,7 @@ JAVASCRIPT;
             }
         } else {
             $resa->getEmpty();
+            $options = Planning::cleanDates($options);
             $resa->fields["begin"] = date("Y-m-d H:i:s", strtotime($options['begin']));
             if (!isset($options['end'])) {
                 $resa->fields["end"] = date("Y-m-d H:00:00", strtotime($resa->fields["begin"]) + HOUR_TIMESTAMP);
@@ -748,10 +763,7 @@ JAVASCRIPT;
             || !Session::haveAccessToEntity($entities_id)
         ) {
             echo "<input type='hidden' name='users_id' value='" . $uid . "'>";
-            echo Dropdown::getDropdownName(
-                User::getTable(),
-                $uid
-            );
+            echo getUserName($uid);
         } else {
             User::dropdown([
                 'value'        => $uid,

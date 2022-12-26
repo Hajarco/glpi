@@ -1,12 +1,13 @@
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -14,18 +15,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -150,12 +152,13 @@ function displayOtherSelectOptions(select_object, other_option_name) {
  * Check all checkboxes inside the given element as the same state as a reference one (toggle this one before)
  * the given element is usaly a table or a div containing the table or tables
  *
- * @param    reference_id    DOM element
- * @param    container_id    DOM element
+ * @param {HTMLElement} reference
+ * @param {string} container_id
 **/
-function checkAsCheckboxes(reference_id, container_id) {
+function checkAsCheckboxes(reference, container_id) {
+    reference = typeof(reference) === 'string' ? document.getElementById(reference) : reference;
     $('#' + container_id + ' input[type="checkbox"]:enabled')
-        .prop('checked', $('#' + reference_id).is(':checked'));
+        .prop('checked', $(reference).is(':checked'));
 
     return true;
 }
@@ -188,10 +191,9 @@ $.fn.shiftSelectable = function() {
         }
 
         if (evt.shiftKey) {
-            evt.preventDefault();
             var start = $boxes.index(selected_checkbox);
             var end = $boxes.index(lastChecked);
-            $boxes.slice(Math.min(start, end), Math.max(start, end) + 1)
+            $boxes.slice(Math.min(start, end), Math.max(start, end))
                 .prop('checked', $(lastChecked).is(':checked'))
                 .trigger('change');
         }
@@ -704,7 +706,7 @@ function _eltRealSize(_elt) {
     return _s;
 }
 
-var initMap = function(parent_elt, map_id, height, initial_view = {position: [43.6112422, 3.8767337], zoom: 6}) {
+var initMap = function(parent_elt, map_id, height, initial_view = {position: [0, 0], zoom: 1}) {
     // default parameters
     map_id = (typeof map_id !== 'undefined') ? map_id : 'map';
     height = (typeof height !== 'undefined') ? height : '200px';
@@ -887,6 +889,10 @@ var templateSelection = function (selection) {
 };
 
 var templateItilStatus = function(option) {
+    if (option === false) {
+        // Option is false when element does not match searched terms
+        return null;
+    }
     var status = option.id || 0;
 
     var classes = "";
@@ -939,6 +945,11 @@ var templateItilStatus = function(option) {
 };
 
 var templateValidation = function(option) {
+    if (option === false) {
+        // Option is false when element does not match searched terms
+        return null;
+    }
+
     var status = option.id || 0;
 
     var classes = "";
@@ -958,10 +969,18 @@ var templateValidation = function(option) {
 };
 
 var templateItilPriority = function(option) {
+    if (option === false) {
+        // Option is false when element does not match searched terms
+        return null;
+    }
+
     var priority = option.id || 0;
     var priority_color = CFG_GLPI['priority_'+priority] || "";
+    var color_badge = "";
 
-    var color_badge = `<i class='fas fa-circle' style='color: ${priority_color}'></i>`;
+    if (priority_color.length > 0) {
+        color_badge += `<i class='fas fa-circle' style='color: ${priority_color}'></i>`;
+    }
 
     return $(`<span>${color_badge}&nbsp;${option.text}</span>`);
 };
@@ -991,6 +1010,9 @@ var getTextWithoutDiacriticalMarks = function (text) {
  * @return {string}
  */
 var escapeMarkupText = function (text) {
+    if (typeof(text) !== 'string') {
+        return text;
+    }
     if (text.indexOf('>') !== -1 || text.indexOf('<') !== -1) {
         // escape text, if it contains chevrons (can already be escaped prior to this point :/)
         text = jQuery.fn.select2.defaults.defaults.escapeMarkup(text);
@@ -1370,7 +1392,10 @@ function flashIconButton(button, button_classes, icon_classes, duration) {
 function uniqid(prefix = "", more_entropy = false) {
     const sec = Date.now() * 1000 + Math.random() * 1000;
     const id = sec.toString(16).replace(/\./g, "").padEnd(14, "0");
-    return `${prefix}${id}${more_entropy ? `.${Math.trunc(Math.random() * 100000000)}`:""}`;
+    const suffix = more_entropy
+        ? '.' + Math.floor(Math.random() * 100000000).toString().padStart(8, '0')
+        : '';
+    return `${prefix}${id}${suffix}`;
 }
 
 /**
@@ -1425,4 +1450,56 @@ $(document.body).on('submit', 'form[data-submit-once]', (e) => {
 function strip_tags(html_string) {
     var dom = new DOMParser().parseFromString(html_string, 'text/html');
     return dom.body.textContent;
+}
+
+$(document.body).on('shown.bs.tab', 'a[data-bs-toggle="tab"]', (e) => {
+    const new_tab = $(e.target);
+    // Main tab is the first in the list (check parent li)
+    const is_main_tab = new_tab.parent().index() === 0;
+    const nav_header = new_tab.closest('.card-tabs').parent().find('.navigationheader');
+    if (nav_header.length > 0) {
+        const is_recursive_toggle = nav_header.find('span.is_recursive-toggle');
+        if (is_recursive_toggle.length > 0) {
+            const checkbox = is_recursive_toggle.find('input');
+            const disabled_state = checkbox.prop('disabled');
+            // if data-disabled-initial is not set, set it to the current disabled state
+            if (checkbox.attr('data-disabled-initial') === undefined) {
+                checkbox.attr('data-disabled-initial', disabled_state || false);
+            }
+            const original_disabled_state = checkbox.attr('data-disabled-initial') === 'true';
+            // disable input element inside the toggle
+            checkbox.prop('disabled', is_main_tab ? original_disabled_state : true);
+        }
+    }
+});
+
+/**
+ * Converts a disclosable password field to a normal text field
+ * @param {string} item The ID of the field to be shown
+ */
+function showDisclosablePasswordField(item) {
+    $("#" + item).prop("type", "text");
+}
+
+/**
+ * Converts a normal text field to a password field
+ * @param {string} item The ID of the field to be hidden
+ */
+function hideDisclosablePasswordField(item) {
+    $("#" + item).prop("type", "password");
+}
+
+/**
+ * Copies the password from a disclosable password field to the clipboard
+ * @param {string} item The ID of the field to be copied
+ */
+function copyDisclosablePasswordFieldToClipboard(item) {
+    showDisclosablePasswordField(item);
+    $("#" + item).select();
+    try {
+        document.execCommand("copy");
+    } catch (e) {
+        alert("Copy to clipboard failed'");
+    }
+    hideDisclosablePasswordField(item);
 }

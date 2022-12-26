@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -71,5 +73,96 @@ class DatabaseInstance extends DbTestCase
 
        //ensure databases has been dropped aswell
         $this->integer(countElementsInTable(\Database::getTable()))->isIdenticalTo(0);
+    }
+
+    public function testGetInventoryAgent(): void
+    {
+        $root_entity = getItemByTypeName(\Entity::class, '_test_root_entity', true);
+
+        $computer = $this->createItem(
+            \Computer::class,
+            [
+                'name'        => 'test computer',
+                'entities_id' => 0,
+            ]
+        );
+        $dbinstance = $this->createItem(
+            \DatabaseInstance::class,
+            [
+                'name'     => 'test database',
+                'itemtype' => \Computer::class,
+                'items_id' => $computer->fields['id'],
+            ]
+        );
+
+        $db_agent = $dbinstance->getInventoryAgent();
+        $this->variable($db_agent)->isNull();
+
+        $agenttype_id = getItemByTypeName(\AgentType::class, 'Core', true);
+
+        $agent1 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \DatabaseInstance::class,
+                'items_id'     => $dbinstance->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('yesterday')),
+            ]
+        );
+
+        $agent2 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \DatabaseInstance::class,
+                'items_id'     => $dbinstance->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('last week')),
+            ]
+        );
+
+        $agent3 = $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Computer::class,
+                'items_id'     => $computer->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('last hour')),
+            ]
+        );
+
+        $this->createItem(
+            \Agent::class,
+            [
+                'deviceid'     => sprintf('device_%08x', rand()),
+                'agenttypes_id' => $agenttype_id,
+                'itemtype'     => \Computer::class,
+                'items_id'     => $computer->fields['id'],
+                'last_contact' => date('Y-m-d H:i:s', strtotime('yesterday')),
+            ]
+        );
+
+        // most recent agent directly linked
+        $db_agent = $dbinstance->getInventoryAgent();
+        $this->object($db_agent)->isInstanceOf(\Agent::class);
+        $this->array($db_agent->fields)->isEqualTo($agent1->fields);
+
+        $this->boolean($agent1->delete(['id' => $agent1->fields['id']]))->isTrue();
+
+        // most recent agent directly linked
+        $db_agent = $dbinstance->getInventoryAgent();
+        $this->object($db_agent)->isInstanceOf(\Agent::class);
+        $this->array($db_agent->fields)->isEqualTo($agent2->fields);
+
+        $this->boolean($agent2->delete(['id' => $agent2->fields['id']]))->isTrue();
+
+        // most recent agent found from linked item, as there is no more agent linked directly
+        $db_agent = $dbinstance->getInventoryAgent();
+        $this->object($db_agent)->isInstanceOf(\Agent::class);
+        $computer_agent = $computer->getInventoryAgent();
+        $this->object($computer_agent)->isInstanceOf(\Agent::class);
+        $this->array($db_agent->fields)->isEqualTo($computer_agent->fields);
     }
 }

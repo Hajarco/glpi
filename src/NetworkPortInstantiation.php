@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -541,7 +543,7 @@ class NetworkPortInstantiation extends CommonDBChild
      **/
     public function showNetworkCardField(NetworkPort $netport, $options = [], $recursiveItems = [])
     {
-        global $DB;
+        global $CFG_GLPI, $DB;
 
         echo "<td>" . DeviceNetworkCard::getTypeName(1) . "</td>\n";
         echo "<td>";
@@ -549,9 +551,8 @@ class NetworkPortInstantiation extends CommonDBChild
         if (count($recursiveItems)  > 0) {
             $lastItem = $recursiveItems[count($recursiveItems) - 1];
 
-           // Network card association is only available for computers
             if (
-                ($lastItem->getType() == 'Computer')
+                in_array($lastItem->getType(), $CFG_GLPI["itemdevicenetworkcard_types"])
                 && !$options['several']
             ) {
                 // Query each link to network cards
@@ -865,9 +866,10 @@ class NetworkPortInstantiation extends CommonDBChild
         if ($item->getType() == "NetworkPort") {
             $instantiation = $item->getInstantiation();
             if ($instantiation !== false) {
-                return Log::displayTabContentForItem($instantiation, $tabnum, $withtemplate);
+                Log::displayTabContentForItem($instantiation, $tabnum, $withtemplate);
             }
         }
+        return true;
     }
 
 
@@ -927,7 +929,7 @@ class NetworkPortInstantiation extends CommonDBChild
                         _x('button', 'Disconnect'),
                         ['id' => $relations_id],
                         'fa-unlink netport',
-                        'class="btn btn-sm btn-ghost-danger"'
+                        'class="btn btn-sm btn-outline-danger"'
                     );
                 }
             } else {

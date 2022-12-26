@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -35,6 +37,7 @@ namespace Glpi\Dashboard;
 
 use Change;
 use CommonDBTM;
+use CommonDBVisible;
 use CommonITILActor;
 use CommonITILObject;
 use CommonITILValidation;
@@ -44,6 +47,7 @@ use Config;
 use DBConnection;
 use Group;
 use Group_Ticket;
+use ITILCategory;
 use Problem;
 use Profile_User;
 use QueryExpression;
@@ -902,8 +906,10 @@ class Provider
                 'SELECT' => "$i_table.*",
                 'FROM'   => $i_table
             ],
-            self::getFiltersCriteria($i_table, $params['apply_filters'])
+            self::getFiltersCriteria($i_table, $params['apply_filters']),
+            $item instanceof CommonDBVisible ? $item::getVisibilityCriteria() : []
         );
+
         $iterator = $DB->request($criteria);
 
         $data = [];
@@ -1676,7 +1682,7 @@ class Provider
             $s_criteria['criteria'][] = [
                 'link'       => 'AND',
                 'field'      => self::getSearchOptionID($table, 'itilcategories_id', 'glpi_itilcategories'), // itilcategory
-                'searchtype' => 'equals',
+                'searchtype' => 'under',
                 'value'      => (int) $apply_filters['itilcategory']
             ];
         }
@@ -1755,16 +1761,19 @@ class Provider
 
         if (
             isset($apply_filters['user_tech'])
-            && (int) $apply_filters['user_tech'] > 0
+            && (
+                (int) $apply_filters['user_tech'] > 0
+                || $apply_filters['user_tech'] == 'myself'
+            )
         ) {
             if ($DB->fieldExists($table, 'users_id_tech')) {
                 $s_criteria['criteria'][] = [
                     'link'       => 'AND',
                     'field'      => self::getSearchOptionID($table, 'users_id_tech', 'glpi_users'),// tech
                     'searchtype' => 'equals',
-                    'value'      =>  (int) $apply_filters['user_tech']
+                    'value'      =>  $apply_filters['user_tech'] == 'myself' ? (int) Session::getLoginUserID() : (int) $apply_filters['user_tech']
                 ];
-            } else if (
+            } elseif (
                 in_array($table, [
                     Ticket::getTable(),
                     Change::getTable(),
@@ -1775,9 +1784,35 @@ class Provider
                     'link'       => 'AND',
                     'field'      => 5,// tech
                     'searchtype' => 'equals',
-                    'value'      =>  (int) $apply_filters['user_tech']
+                    'value'      =>  is_numeric($apply_filters['user_tech']) ? (int) $apply_filters['user_tech'] : $apply_filters['user_tech']
                 ];
             }
+        }
+
+        if (
+            $DB->fieldExists($table, 'states_id')
+            && isset($apply_filters['state'])
+            && (int) $apply_filters['state'] > 0
+        ) {
+            $s_criteria['criteria'][] = [
+                'link'       => 'AND',
+                'field'      => self::getSearchOptionID($table, 'states_id', 'glpi_states'), // state
+                'searchtype' => 'equals',
+                'value'      => (int) $apply_filters['state']
+            ];
+        }
+
+        if (
+            $DB->fieldExists($table, 'type')
+            && isset($apply_filters['tickettype'])
+            && (int) $apply_filters['tickettype'] > 0
+        ) {
+            $s_criteria['criteria'][] = [
+                'link'       => 'AND',
+                'field'      => 'type',
+                'searchtype' => 'equals',
+                'value'      => (int) $apply_filters['tickettype']
+            ];
         }
 
         return $s_criteria;
@@ -1825,7 +1860,7 @@ class Provider
             && (int) $apply_filters['itilcategory'] > 0
         ) {
             $where += [
-                "$table.itilcategories_id" => (int) $apply_filters['itilcategory']
+                "$table.itilcategories_id" => getSonsOf(ITILCategory::getTable(), (int) $apply_filters['itilcategory'])
             ];
         }
 
@@ -1856,6 +1891,26 @@ class Provider
         ) {
             $where += [
                 "$table.manufacturers_id" => (int) $apply_filters['manufacturer']
+            ];
+        }
+
+        if (
+            $DB->fieldExists($table, 'states_id')
+            && isset($apply_filters['state'])
+            && (int) $apply_filters['state'] > 0
+        ) {
+            $where += [
+                "$table.states_id" => (int) $apply_filters['state']
+            ];
+        }
+
+        if (
+            $DB->fieldExists($table, 'type')
+            && isset($apply_filters['tickettype'])
+            && (int) $apply_filters['tickettype'] > 0
+        ) {
+            $where += [
+                "$table.type" => (int) $apply_filters['tickettype']
             ];
         }
 

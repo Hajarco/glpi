@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -37,10 +39,14 @@ use CommonDBTM;
 use CommonITILActor;
 use DBConnection;
 use DbTestCase;
+use Glpi\Toolbox\Sanitizer;
 use Ticket;
 
 /* Test for inc/search.class.php */
 
+/**
+ * @engine isolate
+ */
 class Search extends DbTestCase
 {
     private function doSearch($itemtype, $params, array $forcedisplay = [])
@@ -1054,6 +1060,45 @@ class Search extends DbTestCase
                 'sql' => "LEFT JOIN `glpi_users` ON (`glpi_computers`.`users_id` = `glpi_users`.`id` )"
             ]
             ],
+
+            'linkfield in beforejoin' => [[
+                'itemtype'           => 'Ticket',
+                'table'              => 'glpi_validatorsubstitutes',
+                'field'              => 'name',
+                'linkfield'          => 'validatorsubstitutes_id',
+                'meta'               => false,
+                'meta_type'          => null,
+                'joinparams'         => [
+                    'beforejoin'         => [
+                        'table'          => 'glpi_validatorsubstitutes',
+                        'joinparams'         => [
+                            'jointype'           => 'child',
+                            'beforejoin'         => [
+                                'table'              => \User::getTable(),
+                                'linkfield'          => 'users_id_validate',
+                                'joinparams'             => [
+                                    'beforejoin'             => [
+                                        'table'                  => \TicketValidation::getTable(),
+                                        'joinparams'                 => [
+                                            'jointype'                   => 'child',
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ],
+                    ]
+                ],
+                // This is a real use case. Ensure the LEFT JOIN chain uses consistent table names (see glpi_users_users_id_validate)
+                'sql' => "LEFT JOIN `glpi_ticketvalidations` "
+                . "ON (`glpi_tickets`.`id` = `glpi_ticketvalidations`.`tickets_id` )"
+                . "LEFT JOIN `glpi_users` AS `glpi_users_users_id_validate_57751ba960bd8511d2ad8a01bd8487f4` "
+                . "ON (`glpi_ticketvalidations`.`users_id_validate` = `glpi_users_users_id_validate_57751ba960bd8511d2ad8a01bd8487f4`.`id` ) "
+                . "LEFT JOIN `glpi_validatorsubstitutes` AS `glpi_validatorsubstitutes_f1e9cbef8429d6d41e308371824d1632` "
+                . "ON (`glpi_users_users_id_validate_57751ba960bd8511d2ad8a01bd8487f4`.`id` = `glpi_validatorsubstitutes_f1e9cbef8429d6d41e308371824d1632`.`users_id` )"
+                . "LEFT JOIN `glpi_validatorsubstitutes` AS `glpi_validatorsubstitutes_c9b716cdcdcfe62bc267613fce4d1f48` "
+                . "ON (`glpi_validatorsubstitutes_f1e9cbef8429d6d41e308371824d1632`.`validatorsubstitutes_id` = `glpi_validatorsubstitutes_c9b716cdcdcfe62bc267613fce4d1f48`.`id` )"
+            ]
+            ],
         ];
     }
 
@@ -1099,11 +1144,11 @@ class Search extends DbTestCase
          // Simple Hard-coded cases
             [
                 'IPAddress', 1, 'ASC',
-                ' ORDER BY INET_ATON(`glpi_ipaddresses`.`name`) ASC '
+                ' ORDER BY INET6_ATON(`glpi_ipaddresses`.`name`) ASC '
             ],
             [
                 'IPAddress', 1, 'DESC',
-                ' ORDER BY INET_ATON(`glpi_ipaddresses`.`name`) DESC '
+                ' ORDER BY INET6_ATON(`glpi_ipaddresses`.`name`) DESC '
             ],
             [
                 'User', 1, 'ASC',
@@ -1163,7 +1208,7 @@ class Search extends DbTestCase
                         'searchopt_id' => 1,
                         'order'        => 'ASC'
                     ]
-                ], ' ORDER BY INET_ATON(`glpi_ipaddresses`.`name`) ASC '
+                ], ' ORDER BY INET6_ATON(`glpi_ipaddresses`.`name`) ASC '
             ],
             [
                 'IPAddress',
@@ -1172,7 +1217,7 @@ class Search extends DbTestCase
                         'searchopt_id' => 1,
                         'order'        => 'DESC'
                     ]
-                ], ' ORDER BY INET_ATON(`glpi_ipaddresses`.`name`) DESC '
+                ], ' ORDER BY INET6_ATON(`glpi_ipaddresses`.`name`) DESC '
             ],
             [
                 'User',
@@ -1349,11 +1394,12 @@ class Search extends DbTestCase
 
     private function cleanSQL($sql)
     {
-        $sql = str_replace("\r\n", ' ', $sql);
-        $sql = str_replace("\n", ' ', $sql);
-        while (strpos($sql, '  ') !== false) {
-            $sql = str_replace('  ', ' ', $sql);
-        }
+        // Clean whitespaces
+        $sql = preg_replace('/\s+/', ' ', $sql);
+
+        // Remove whitespaces around parenthesis
+        $sql = preg_replace('/\(\s+/', '(', $sql);
+        $sql = preg_replace('/\s+\)/', ')', $sql);
 
         $sql = trim($sql);
 
@@ -1613,6 +1659,13 @@ class Search extends DbTestCase
             ['rtim this   $', '%rtim this'],
             ['  extra spaces ', '%extra spaces%'],
             ['^ exactval $', 'exactval'],
+            ['snake_case', '%snake\\_case%'], // _ is a wildcard that must be escaped
+            ['quot\'ed', '%quot\\\'ed%'],
+            ['quot\\\'ed', '%quot\\\'ed%'], // already escaped value should not produce double escaping
+            ['^&#60;PROD-15&#62;', '<PROD-15>%'],
+            ['<PROD-15>$', '%<PROD-15>'],
+            ['A&#38;B', '%A&B%'],
+            ['A&B', '%A&B%'],
         ];
     }
 
@@ -1635,7 +1688,7 @@ class Search extends DbTestCase
                 'searchtype' => 'equals',
                 'val' => '5',
                 'meta' => false,
-                'expected' => "   (`glpi_users_users_id_supervisor`.`id` = '5')",
+                'expected' => "(`glpi_users_users_id_supervisor`.`id` = '5')",
             ],
             [
                 'link' => ' AND ',
@@ -1645,7 +1698,7 @@ class Search extends DbTestCase
                 'searchtype' => 'equals',
                 'val' => '2',
                 'meta' => false,
-                'expected' => "  AND  (`glpi_users_users_id_tech`.`id` = '2') ",
+                'expected' => "AND (`glpi_users_users_id_tech`.`id` = '2')",
             ],
             [
                 'link' => ' AND ',
@@ -1655,7 +1708,7 @@ class Search extends DbTestCase
                 'searchtype' => 'contains',
                 'val' => '70',
                 'meta' => false,
-                'expected' => "  AND  (`glpi_monitors`.`size`  LIKE '%70.%'  )",
+                'expected' => "AND (`glpi_monitors`.`size` LIKE '%70.%')",
             ],
             [
                 'link' => ' AND ',
@@ -1665,7 +1718,7 @@ class Search extends DbTestCase
                 'searchtype' => 'contains',
                 'val' => '70.5',
                 'meta' => false,
-                'expected' => "  AND  (`glpi_monitors`.`size`  LIKE '%70.5%'  )",
+                'expected' => "AND (`glpi_monitors`.`size` LIKE '%70.5%')",
             ],
             [
                 'link' => ' AND ',
@@ -1675,8 +1728,68 @@ class Search extends DbTestCase
                 'searchtype' => 'contains',
                 'val' => '70.5%',
                 'meta' => false,
-                'expected' => "  AND  (`glpi_monitors`.`size`  LIKE '%70.5%'  )",
-            ]
+                'expected' => "AND (`glpi_monitors`.`size` LIKE '%70.5%')",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \Computer::class,
+                'ID' => 121, // Search ID 121 (date_creation field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('>2022-10-25'),
+                'meta' => false,
+                'expected' => "AND CONVERT(`glpi_computers`.`date_creation` USING utf8mb4) > '2022-10-25'",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \Computer::class,
+                'ID' => 121, // Search ID 121 (date_creation field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('<2022-10-25'),
+                'meta' => false,
+                'expected' => "AND CONVERT(`glpi_computers`.`date_creation` USING utf8mb4) < '2022-10-25'",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \Computer::class,
+                'ID' => 151, // Search ID 151 (Item_Disk freesize field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('>100'),
+                'meta' => false,
+                'expected' => "AND (`glpi_items_disks`.`freesize` > 100)",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \Computer::class,
+                'ID' => 151, // Search ID 151 (Item_Disk freesize field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('<10000'),
+                'meta' => false,
+                'expected' => "AND (`glpi_items_disks`.`freesize` < 10000)",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \NetworkName::class,
+                'ID' => 13, // Search ID 13 (IPAddress name field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('< 192.168.1.10'),
+                'meta' => false,
+                'expected' => "AND (INET_ATON(`glpi_ipaddresses`.`name`) < INET_ATON('192.168.1.10'))",
+            ],
+            [
+                'link' => ' AND ',
+                'nott' => 0,
+                'itemtype' => \NetworkName::class,
+                'ID' => 13, // Search ID 13 (IPAddress name field)
+                'searchtype' => 'contains',
+                'val' => Sanitizer::sanitize('> 192.168.1.10'),
+                'meta' => false,
+                'expected' => "AND (INET_ATON(`glpi_ipaddresses`.`name`) > INET_ATON('192.168.1.10'))",
+            ],
         ];
     }
 
@@ -1686,7 +1799,7 @@ class Search extends DbTestCase
     public function testAddWhere($link, $nott, $itemtype, $ID, $searchtype, $val, $meta, $expected)
     {
         $output = \Search::addWhere($link, $nott, $itemtype, $ID, $searchtype, $val, $meta);
-        $this->string($output)->isEqualTo($expected);
+        $this->string($this->cleanSQL($output))->isEqualTo($expected);
 
         if ($meta) {
             return; // Do not know how to run search on meta here
@@ -1725,7 +1838,7 @@ class Search extends DbTestCase
         ];
         $data = $this->doSearch('Computer', $search_params);
 
-        $this->integer($data['data']['totalcount'])->isIdenticalTo(8);
+        $this->integer($data['data']['totalcount'])->isIdenticalTo(9);
 
         $displaypref = new \DisplayPreference();
         $input = [
@@ -1737,7 +1850,7 @@ class Search extends DbTestCase
 
         $data = $this->doSearch('Computer', $search_params);
 
-        $this->integer($data['data']['totalcount'])->isIdenticalTo(8);
+        $this->integer($data['data']['totalcount'])->isIdenticalTo(9);
     }
 
     public function testSearchWithMultipleFkeysOnSameTable()
@@ -1973,6 +2086,7 @@ class Search extends DbTestCase
                     'as_map'       => 0,
                 ],
                 'expected' => [
+                    '_test_pc_with_encoded_comment',
                     '_test_pc01',
                     '_test_pc02',
                     '_test_pc03',

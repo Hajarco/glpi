@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -95,7 +97,6 @@ class Item_Ticket extends CommonItilObject_Item
         $ticket = new Ticket();
         $input  = ['id'            => $this->fields['tickets_id'],
             'date_mod'      => $_SESSION["glpi_currenttime"],
-            '_donotadddocs' => true
         ];
 
         if (!isset($this->input['_do_notif']) || $this->input['_do_notif']) {
@@ -116,7 +117,6 @@ class Item_Ticket extends CommonItilObject_Item
         $ticket = new Ticket();
         $input = ['id'            => $this->fields['tickets_id'],
             'date_mod'      => $_SESSION["glpi_currenttime"],
-            '_donotadddocs' => true
         ];
 
         if (!isset($this->input['_do_notif']) || $this->input['_do_notif']) {
@@ -190,6 +190,7 @@ class Item_Ticket extends CommonItilObject_Item
 
         $params = [
             'id'  => (isset($ticket->fields['id']) && $ticket->fields['id'] != '') ? $ticket->fields['id'] : 0,
+            'entities_id'  => (isset($ticket->fields['entities_id']) && is_numeric($ticket->fields['entities_id']) ? $ticket->fields['entities_id'] : Session::getActiveEntity()),
             '_users_id_requester' => 0,
             'items_id'            => [],
             'itemtype'            => '',
@@ -277,12 +278,12 @@ class Item_Ticket extends CommonItilObject_Item
            // My items
             if ($params['_users_id_requester'] > 0) {
                 ob_start();
-                self::dropdownMyDevices($params['_users_id_requester'], $ticket->fields["entities_id"], $params['itemtype'], 0, $p);
+                self::dropdownMyDevices($params['_users_id_requester'], $params['entities_id'], $params['itemtype'], 0, $p);
                 $twig_params['my_items_dropdown'] = ob_get_clean();
             }
            // Global search
             ob_start();
-            self::dropdownAllDevices("itemtype", $params['itemtype'], 0, 1, $params['_users_id_requester'], $ticket->fields["entities_id"], $p);
+            self::dropdownAllDevices("itemtype", $params['itemtype'], 0, 1, $params['_users_id_requester'], $params['entities_id'], $p);
             $twig_params['all_items_dropdown'] = ob_get_clean();
         }
 
@@ -317,7 +318,7 @@ class Item_Ticket extends CommonItilObject_Item
         $twig_params['count'] = $count;
         $twig_params['usedcount'] = $usedcount;
 
-        foreach (['id', '_users_id_requester', 'items_id', 'itemtype', '_canupdate'] as $key) {
+        foreach (['id', '_users_id_requester', 'items_id', 'itemtype', '_canupdate', 'entities_id'] as $key) {
             $twig_params['opt'][$key] = $params[$key];
         }
 
@@ -449,6 +450,8 @@ class Item_Ticket extends CommonItilObject_Item
         $header_end .= "<th>" . __('Serial number') . "</th>";
         $header_end .= "<th>" . __('Inventory number') . "</th>";
         $header_end .= "<th>" . __('Knowledge base entries') . "</th>";
+        $header_end .= "<th>" . State::getTypeName(1) . "</th>";
+        $header_end .= "<th>" . Location::getTypeName(1) . "</th>";
         echo "<tr>";
         echo $header_begin . $header_top . $header_end;
 
@@ -465,7 +468,7 @@ class Item_Ticket extends CommonItilObject_Item
 
                 $prem = true;
                 foreach ($iterator as $data) {
-                    $name = $data["name"];
+                    $name = $data["name"] ?? '';
                     if (
                         $_SESSION["glpiis_ids_visible"]
                         || empty($data["name"])
@@ -502,6 +505,10 @@ class Item_Ticket extends CommonItilObject_Item
                       (isset($data["otherserial"]) ? "" . $data["otherserial"] . "" : "-") . "</td>";
                     $item->getFromDB($data["id"]);
                     echo "<td class='center'>" . $item->getKBLinks() . "</td>";
+                    echo "<td class='center'>";
+                    echo Dropdown::getDropdownName("glpi_states", $data['states_id']) . "</td>";
+                    echo "<td class='center'>";
+                    echo Dropdown::getDropdownName("glpi_locations", $data['locations_id']) . "</td>";
                     echo "</tr>";
                 }
                 $totalnb += $nb;

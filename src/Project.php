@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,18 +17,19 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
@@ -35,6 +37,7 @@ use Glpi\Application\View\TemplateRenderer;
 use Glpi\Plugin\Hooks;
 use Glpi\RichText\RichText;
 use Glpi\Team\Team;
+use Glpi\Toolbox\Sanitizer;
 
 /**
  * Project Class
@@ -161,7 +164,6 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                         );
                     }
                     $ong[1] = self::createTabEntry($this->getTypeName(Session::getPluralNumber()), $nb);
-                    $ong[2] = __('GANTT');
                     $ong[3] = __('Kanban');
                     return $ong;
             }
@@ -179,10 +181,6 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                 switch ($tabnum) {
                     case 1:
                         $item->showChildren();
-                        break;
-
-                    case 2:
-                        $item->showGantt($item->getID());
                         break;
 
                     case 3:
@@ -245,6 +243,7 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                 ]
             ]
         ];
+        return false;
     }
 
 
@@ -269,7 +268,6 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
 
             $links[$pic_validate] = ProjectTask::getSearchURL(false);
 
-            $links['summary_gantt'] = Project::getFormURL(false) . '?showglobalgantt=1';
             $links['summary_kanban'] = Project::getFormURL(false) . '?showglobalkanban=1';
         }
         if (count($links)) {
@@ -624,13 +622,16 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
             'step'               => 5
         ];
 
-        $tab[] = [
-            'id'                 => '6',
-            'table'              => $this->getTable(),
-            'field'              => 'show_on_global_gantt',
-            'name'               => __('Show on global GANTT'),
-            'datatype'           => 'bool'
-        ];
+        $plugin = new Plugin();
+        if ($plugin->isActivated('gantt')) {
+            $tab[] = [
+                'id'                 => '6',
+                'table'              => $this->getTable(),
+                'field'              => 'show_on_global_gantt',
+                'name'               => __('Show on global Gantt'),
+                'datatype'           => 'bool'
+            ];
+        }
 
         $tab[] = [
             'id'                 => '24',
@@ -1561,9 +1562,21 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         }
 
         echo "<tr class='tab_bg_1'>";
-        echo "<td>" . __('Name') . "</td>";
+        $tplmark = $this->getAutofillMark('name', $options);
+        echo "<td>" . __('Name') . $tplmark . "</td>";
         echo "<td>";
-        echo Html::input('name', ['value' => $this->fields['name']]);
+        echo Html::input(
+            'name',
+            [
+                'value' => autoName(
+                    Sanitizer::decodeHtmlSpecialChars($this->fields['name']),
+                    'name',
+                    $from_template,
+                    $this->getType(),
+                    $this->fields['entities_id']
+                )
+            ]
+        );
         echo "</td>";
         echo "<td>" . __('Code') . "</td>";
         echo "<td>";
@@ -1625,10 +1638,13 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         echo "<td>";
         ProjectType::dropdown(['value' => $this->fields["projecttypes_id"]]);
         echo "</td>";
-        echo "<td>" . __('Show on global GANTT') . "</td>";
-        echo "<td>";
-        Dropdown::showYesNo("show_on_global_gantt", $this->fields["show_on_global_gantt"]);
-        echo "</td>";
+        $plugin = new Plugin();
+        if ($plugin->isActivated('gantt')) {
+            echo "<td>" . __('Show on global Gantt') . "</td>";
+            echo "<td>";
+            Dropdown::showYesNo("show_on_global_gantt", $this->fields["show_on_global_gantt"]);
+            echo "</td>";
+        }
         echo "</tr>";
 
         echo "<tr><td colspan='4' class='subheader'>" . _n('Manager', 'Managers', 1) . "</td></tr>";
@@ -1859,128 +1875,6 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         return true;
     }
 
-
-    /** Get data to display on GANTT
-     *
-     * @param $ID        integer   ID of the project
-     * @param $showall   boolean   show all sub items (projects / tasks) (true by default)
-     */
-    public static function getDataToDisplayOnGantt($ID, $showall = true)
-    {
-        global $DB;
-
-        $todisplay = [];
-        $project   = new self();
-        if ($project->getFromDB($ID)) {
-            $projects = [];
-            foreach ($DB->request('glpi_projects', ['projects_id' => $ID]) as $data) {
-                $projects += static::getDataToDisplayOnGantt($data['id']);
-            }
-            ksort($projects);
-           // Get all tasks
-            $tasks      = ProjectTask::getAllForProject($ID);
-
-            $real_begin = null;
-            $real_end   = null;
-           // Use real if set
-            if (is_null($project->fields['real_start_date'])) {
-                $real_begin = $project->fields['real_start_date'];
-            }
-
-           // Determine begin / end date of current project if not set (min/max sub projects / tasks)
-            if (is_null($real_begin)) {
-                if (!is_null($project->fields['plan_start_date'])) {
-                    $real_begin = $project->fields['plan_start_date'];
-                } else {
-                    foreach ($tasks as $task) {
-                        if (
-                            is_null($real_begin)
-                            || (!is_null($task['plan_start_date'])
-                            && ($real_begin > $task['plan_start_date']))
-                        ) {
-                            $real_begin = $task['plan_start_date'];
-                        }
-                    }
-                    foreach ($projects as $p) {
-                        if (
-                            is_null($real_begin)
-                            || (($p['type'] == 'project')
-                            && !is_null($p['from'])
-                            && ($real_begin > $p['from']))
-                        ) {
-                            $real_begin = $p['from'];
-                        }
-                    }
-                }
-            }
-
-           // Use real if set
-            if (!is_null($project->fields['real_end_date'])) {
-                $real_end = $project->fields['real_end_date'];
-            }
-            if (is_null($real_end)) {
-                if (!is_null($project->fields['plan_end_date'])) {
-                    $real_end = $project->fields['plan_end_date'];
-                } else {
-                    foreach ($tasks as $task) {
-                        if (
-                            is_null($real_end)
-                            || (!is_null($task['plan_end_date'])
-                            && ($real_end < $task['plan_end_date']))
-                        ) {
-                            $real_end = $task['plan_end_date'];
-                        }
-                    }
-                    foreach ($projects as $p) {
-                        if (
-                            is_null($real_end)
-                            || (($p['type'] == 'project')
-                            && !is_null($p['to'])
-                            && ($real_end < $p['to']))
-                        ) {
-                            $real_end = $p['to'];
-                        }
-                    }
-                }
-            }
-
-           // Add current project
-            $todisplay[$real_begin . '#' . $real_end . '#project' . $project->getID()]
-                      = ['id'       => $project->getID(),
-                          'name'     => $project->fields['name'],
-                          'link'     => $project->getLink(),
-                          'desc'     => $project->fields['content'],
-                          'percent'  => isset($project->fields['percent_done']) ? $project->fields['percent_done'] : 0,
-                          'type'     => 'project',
-                          'from'     => $real_begin,
-                          'to'       => $real_end
-                      ];
-
-            if ($showall) {
-               // Add current tasks
-                $todisplay += ProjectTask::getDataToDisplayOnGanttForProject($ID);
-
-               // Add ordered subprojects
-                foreach ($projects as $key => $val) {
-                    $todisplay[$key] = $val;
-                }
-            }
-        }
-
-        return $todisplay;
-    }
-
-    /**
-     * Show GANTT diagram for a project
-     * @param $ID ID of the project
-     */
-    public static function showGantt($ID)
-    {
-        TemplateRenderer::getInstance()->display('pages/tools/project/gantt.html.twig', [
-            'id' => $ID,
-        ]);
-    }
-
     public static function getAllForKanban($active = true, $current_id = -1)
     {
         global $DB;
@@ -1988,7 +1882,9 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         $items = [
             -1 => __('Global')
         ];
-        $criteria = [];
+        $criteria = [
+            'is_template' => 0,
+        ];
         $joins = [];
         if ($active) {
             $criteria += [
@@ -2078,9 +1974,13 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         $project = new Project();
         $project_visibility = self::getVisibilityCriteria();
         $project_visibility['WHERE'] += getEntitiesRestrictCriteria(self::getTable(), '', '', 'auto');
+
+        $required_project_fields = [
+            'id', 'name', 'content', 'plan_start_date', 'plan_end_date', 'real_start_date',
+            'real_end_date', 'percent_done', 'projects_id', 'projectstates_id', 'is_deleted'
+        ];
         $request = [
             'SELECT' => [
-                'glpi_projects.*',
                 'glpi_projectstates.is_finished'
             ],
             'FROM'   => 'glpi_projects',
@@ -2092,8 +1992,13 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                     ]
                 ]
             ] + $project_visibility['LEFT JOIN'],
-            'WHERE'     => $project_visibility['WHERE'],
+            'WHERE'     => $project_visibility['WHERE'] + [
+                'is_template' => 0
+            ],
         ];
+        foreach ($required_project_fields as $field) {
+            $request['SELECT'][] = 'glpi_projects.' . $field;
+        }
         if ($ID > 0) {
             $request['WHERE']['glpi_projects.projects_id'] = $ID;
             $request['WHERE'] += $criteria;
@@ -2104,9 +2009,9 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         foreach ($iterator as $data) {
             $projects[$data['id']] = $data;
         }
-        $project_ids = array_map(function ($e) {
+        $project_ids = array_map(static function ($e) {
             return $e['id'];
-        }, array_filter($projects, function ($e) use ($ID) {
+        }, array_filter($projects, static function ($e) use ($ID) {
           // Filter tasks of closed projects in Global view
             return ($ID > 0 || !$e['is_finished']);
         }));
@@ -2115,15 +2020,12 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
        // Get sub-tasks
         $projecttask = new ProjectTask();
         $projecttaskteam = new ProjectTaskTeam();
-        $project_ids_criteria = [];
-        if ($ID <= 0 && count($project_ids)) {
-           // Global view
-            $project_ids_criteria = ['projects_id' => $project_ids];
-        } else {
-            $project_ids_criteria = ['projects_id' => $ID];
-        }
-        $projecttasks = $projecttask->find($project_ids_criteria + $criteria);
-        $projecttask_ids = array_map(function ($e) {
+        $project_task_criteria = [
+            'is_template' => 0,
+            'projects_id' => ($ID <= 0 && count($project_ids)) ? $project_ids : $ID,
+        ];
+        $projecttasks = $projecttask->find($project_task_criteria + $criteria);
+        $projecttask_ids = array_map(static function ($e) {
             return $e['id'];
         }, $projecttasks);
         $projecttaskteams = count($projecttask_ids) ? $projecttaskteam->find(['projecttasks_id' => $projecttask_ids]) : [];
@@ -2137,9 +2039,9 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         ];
         $all_members = [];
         foreach ($supported_teamtypes as $itemtype => $fields) {
-            $all_ids = array_map(function ($e) {
+            $all_ids = array_map(static function ($e) {
                 return $e['items_id'];
-            }, array_filter(array_merge($projectteams, $projecttaskteams), function ($e) use ($itemtype) {
+            }, array_filter(array_merge($projectteams, $projecttaskteams), static function ($e) use ($itemtype) {
                 return ($e['itemtype'] === $itemtype);
             }));
             if (count($all_ids)) {
@@ -2177,14 +2079,14 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
             $project->fields = $subproject;
             $item['_readonly'] = !Project::canUpdate() || !$project->canUpdateItem();
 
-            $subproject_teams = array_filter($projectteams, function ($e) use ($subproject) {
+            $subproject_teams = array_filter($projectteams, static function ($e) use ($subproject) {
                 return $e['projects_id'] == $subproject['id'];
             });
             foreach ($subproject_teams as $teammember) {
                 switch ($teammember['itemtype']) {
                     case 'Group':
                     case 'Supplier':
-                        $matches = array_filter($all_members[$teammember['itemtype']], function ($e) use ($teammember) {
+                        $matches = array_filter($all_members[$teammember['itemtype']], static function ($e) use ($teammember) {
                             return ($e['id'] == $teammember['items_id']);
                         });
                         if (count($matches)) {
@@ -2193,7 +2095,7 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                         break;
                     case 'User':
                     case 'Contact':
-                        $contact_matches = array_filter($all_members[$teammember['itemtype']], function ($e) use ($teammember) {
+                        $contact_matches = array_filter($all_members[$teammember['itemtype']], static function ($e) use ($teammember) {
                             return ($e['id'] == $teammember['items_id']);
                         });
                         if (count($contact_matches)) {
@@ -2225,14 +2127,14 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
             $projecttask->fields = $subtask;
             $item['_readonly'] = !ProjectTask::canUpdate() || !$projecttask->canUpdateItem();
 
-            $subtask_teams = array_filter($projecttaskteams, function ($e) use ($subtask) {
+            $subtask_teams = array_filter($projecttaskteams, static function ($e) use ($subtask) {
                 return $e['projecttasks_id'] == $subtask['id'];
             });
             foreach ($subtask_teams as $teammember) {
                 switch ($teammember['itemtype']) {
                     case 'Group':
                     case 'Supplier':
-                        $matches = array_filter($all_members[$teammember['itemtype']], function ($e) use ($teammember) {
+                        $matches = array_filter($all_members[$teammember['itemtype']], static function ($e) use ($teammember) {
                             return ($e['id'] == $teammember['items_id']);
                         });
                         if (count($matches)) {
@@ -2241,7 +2143,7 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                         break;
                     case 'User':
                     case 'Contact':
-                        $contact_matches = array_filter($all_members[$teammember['itemtype']], function ($e) use ($teammember) {
+                        $contact_matches = array_filter($all_members[$teammember['itemtype']], static function ($e) use ($teammember) {
                             return ($e['id'] == $teammember['items_id']);
                         });
                         if (count($contact_matches)) {
@@ -2301,7 +2203,6 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                 'id'              => "{$itemtype}-{$item['id']}",
                 'title'           => '<span class="pointer">' . $item['name'] . '</span>',
                 'title_tooltip'   => Html::resume_text(RichText::getTextFromHtml($item['content'] ?? "", false, true), 100),
-                'is_deleted'      => $item['is_deleted'] ?? false,
             ];
 
             $content = "<div class='kanban-plugin-content'>";
@@ -2362,7 +2263,7 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
             $card['_form_link'] = $itemtype::getFormUrlWithID($item['id']);
             $card['_metadata'] = [];
             $metadata_values = ['name', 'content', 'is_milestone', 'plan_start_date', 'plan_end_date', 'real_start_date', 'real_end_date',
-                'planned_duration', 'effective_duration', 'percent_done'
+                'planned_duration', 'effective_duration', 'percent_done', 'is_deleted'
             ];
             foreach ($metadata_values as $metadata_value) {
                 if (isset($item[$metadata_value])) {
@@ -2424,100 +2325,98 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
         }
 
         $supported_itemtypes = [];
-        if (Project::canCreate()) {
-            $team_role_ids = static::getTeamRoles();
-            $team_roles = [];
+        $team_role_ids = static::getTeamRoles();
+        $team_roles = [];
 
-            foreach ($team_role_ids as $role_id) {
-                $team_roles[$role_id] = static::getTeamRoleName($role_id);
-            }
-           // Owner cannot be set from the Kanban view yet because it is a special case (One owner user and one owner group)
-            unset($team_roles[Team::ROLE_OWNER]);
-
-            $supported_itemtypes['Project'] = [
-                'name'   => Project::getTypeName(1),
-                'icon'   => Project::getIcon(),
-                'fields' => [
-                    'projects_id'  => [
-                        'type'   => 'hidden',
-                        'value'  => $ID
-                    ],
-                    'name'   => [
-                        'placeholder'  => __('Name')
-                    ],
-                    'content'   => [
-                        'placeholder'  => __('Content'),
-                        'type'         => 'textarea'
-                    ],
-                    'users_id'  => [
-                        'type'         => 'hidden',
-                        'value'        => $_SESSION['glpiID']
-                    ],
-                    'entities_id' => [
-                        'type'   => 'hidden',
-                        'value'  => $ID > 0 ? $project->fields["entities_id"] : $_SESSION['glpiactive_entity'],
-                    ],
-                    'is_recursive' => [
-                        'type'   => 'hidden',
-                        'value'  => 0
-                    ]
-                ],
-                'team_itemtypes'  => Project::getTeamItemtypes(),
-                'team_roles'      => $team_roles,
-            ];
+        foreach ($team_role_ids as $role_id) {
+            $team_roles[$role_id] = static::getTeamRoleName($role_id);
         }
+        // Owner cannot be set from the Kanban view yet because it is a special case (One owner user and one owner group)
+        unset($team_roles[Team::ROLE_OWNER]);
 
-        if (ProjectTask::canCreate()) {
-            $team_role_ids = static::getTeamRoles();
-            $team_roles = [];
-
-            foreach ($team_role_ids as $role_id) {
-                $team_roles[$role_id] = static::getTeamRoleName($role_id);
-            }
-           // Owner cannot be set from the Kanban view yet because it is a special case (One owner user and one owner group)
-            unset($team_roles[Team::ROLE_OWNER]);
-
-            $supported_itemtypes['ProjectTask'] = [
-                'name'   => ProjectTask::getTypeName(1),
-                'icon'   => ProjectTask::getIcon(),
-                'fields' => [
-                    'projects_id'  => [
-                        'type'   => 'hidden',
-                        'value'  => $ID
-                    ],
-                    'name'   => [
-                        'placeholder'  => __('Name')
-                    ],
-                    'content'   => [
-                        'placeholder'  => __('Content'),
-                        'type'         => 'textarea'
-                    ],
-                    'projecttasktemplates_id' => [
-                        'type'   => 'hidden',
-                        'value'  => 0
-                    ],
-                    'projecttasks_id' => [
-                        'type'   => 'hidden',
-                        'value'  => 0
-                    ],
-                    'entities_id' => [
-                        'type'   => 'hidden',
-                        'value'  => $ID > 0 ? $project->fields["entities_id"] : $_SESSION['glpiactive_entity'],
-                    ],
-                    'is_recursive' => [
-                        'type'   => 'hidden',
-                        'value'  => 0
-                    ]
+        $supported_itemtypes['Project'] = [
+            'name'   => Project::getTypeName(1),
+            'icon'   => Project::getIcon(),
+            'fields' => [
+                'projects_id'  => [
+                    'type'   => 'hidden',
+                    'value'  => $ID
                 ],
-                'team_itemtypes'  => ProjectTask::getTeamItemtypes(),
-                'team_roles'      => $team_roles,
+                'name'   => [
+                    'placeholder'  => __('Name')
+                ],
+                'content'   => [
+                    'placeholder'  => __('Content'),
+                    'type'         => 'textarea'
+                ],
+                'users_id'  => [
+                    'type'         => 'hidden',
+                    'value'        => $_SESSION['glpiID']
+                ],
+                'entities_id' => [
+                    'type'   => 'hidden',
+                    'value'  => $ID > 0 ? $project->fields["entities_id"] : $_SESSION['glpiactive_entity'],
+                ],
+                'is_recursive' => [
+                    'type'   => 'hidden',
+                    'value'  => 0
+                ]
+            ],
+            'team_itemtypes'  => Project::getTeamItemtypes(),
+            'team_roles'      => $team_roles,
+            'allow_create'    => Project::canCreate()
+        ];
+
+        $team_role_ids = static::getTeamRoles();
+        $team_roles = [];
+
+        foreach ($team_role_ids as $role_id) {
+            $team_roles[$role_id] = static::getTeamRoleName($role_id);
+        }
+        // Owner cannot be set from the Kanban view yet because it is a special case (One owner user and one owner group)
+        unset($team_roles[Team::ROLE_OWNER]);
+
+        $supported_itemtypes['ProjectTask'] = [
+            'name'   => ProjectTask::getTypeName(1),
+            'icon'   => ProjectTask::getIcon(),
+            'fields' => [
+                'projects_id'  => [
+                    'type'   => 'hidden',
+                    'value'  => $ID
+                ],
+                'name'   => [
+                    'placeholder'  => __('Name')
+                ],
+                'content'   => [
+                    'placeholder'  => __('Content'),
+                    'type'         => 'textarea'
+                ],
+                'projecttasktemplates_id' => [
+                    'type'   => 'hidden',
+                    'value'  => 0
+                ],
+                'projecttasks_id' => [
+                    'type'   => 'hidden',
+                    'value'  => 0
+                ],
+                'entities_id' => [
+                    'type'   => 'hidden',
+                    'value'  => $ID > 0 ? $project->fields["entities_id"] : $_SESSION['glpiactive_entity'],
+                ],
+                'is_recursive' => [
+                    'type'   => 'hidden',
+                    'value'  => 0
+                ]
+            ],
+            'team_itemtypes'  => ProjectTask::getTeamItemtypes(),
+            'team_roles'      => $team_roles,
+            'allow_create'    => ProjectTask::canCreate()
+        ];
+        if ($ID <= 0) {
+            $supported_itemtypes['ProjectTask']['fields']['projects_id'] = [
+                'type'   => 'raw',
+                'value'  => Project::dropdown(['display' => false, 'width' => '90%'])
             ];
-            if ($ID <= 0) {
-                $supported_itemtypes['ProjectTask']['fields']['projects_id'] = [
-                    'type'   => 'raw',
-                    'value'  => Project::dropdown(['display' => false, 'width' => '90%'])
-                ];
-            }
         }
         $column_field = [
             'id' => 'projectstates_id',
@@ -2564,6 +2463,10 @@ class Project extends CommonDBTM implements ExtraVisibilityCriteria
                 'content' => [
                     'description' => _x('filters', 'The content of the item'),
                     'supported_prefixes' => ['!', '#']
+                ],
+                'deleted' => [
+                    'description' => _x('filters', 'If the item is deleted or not'),
+                    'supported_prefixes' => ['!']
                 ],
                 'team' => [
                     'description' => _x('filters', 'A team member for the item'),

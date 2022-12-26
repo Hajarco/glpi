@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,32 +17,31 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
 
 use Glpi\SocketModel;
 
 // Current version of GLPI
-define('GLPI_VERSION', '10.0.0-rc3');
+define('GLPI_VERSION', '10.0.6-dev');
+
+$schema_file = sprintf('%s/install/mysql/glpi-empty.sql', GLPI_ROOT);
 define(
     "GLPI_SCHEMA_VERSION",
-    GLPI_VERSION . (
-        is_readable(GLPI_ROOT . '/install/mysql/glpi-empty.sql')
-        ? '@' . sha1_file(GLPI_ROOT . '/install/mysql/glpi-empty.sql')
-        : ''
-    )
+    GLPI_VERSION . (is_readable($schema_file) ? '@' . sha1_file($schema_file) : '')
 );
 
 if (!defined('GLPI_MARKETPLACE_PRERELEASES')) {
@@ -49,7 +49,7 @@ if (!defined('GLPI_MARKETPLACE_PRERELEASES')) {
 }
 
 define('GLPI_MIN_PHP', '7.4.0'); // Must also be changed in top of index.php
-define('GLPI_MAX_PHP', '8.2.0'); // (Exclusive) Must also be changed in top of index.php
+define('GLPI_MAX_PHP', '8.3.0'); // (Exclusive) Must also be changed in top of index.php
 define('GLPI_YEAR', '2022');
 
 //Define a global recipient address for email notifications
@@ -82,6 +82,7 @@ $CFG_GLPI['languages'] = [
     'en_GB'  => ['English',                   'en_GB.mo',    'en-GB', 'en', 'english',              2],
     'en_US'  => ['English (US)',              'en_US.mo',    'en-GB', 'en', 'english',              2],
     'es_AR'  => ['Español (Argentina)',       'es_AR.mo',    'es',    'es', 'spanish',              2],
+    'es_EC'  => ['Español (Ecuador)',         'es_EC.mo',    'es',    'es', 'spanish',              2],
     'es_CO'  => ['Español (Colombia)',        'es_CO.mo',    'es',    'es', 'spanish',              2],
     'es_ES'  => ['Español (España)',          'es_ES.mo',    'es',    'es', 'spanish',              2],
     'es_419' => ['Español (América Latina)',  'es_419.mo',   'es',    'es', 'spanish',              2],
@@ -184,7 +185,7 @@ $LANG             = [];
 $CFG_GLPI["unicity_types"]                = ['Budget', 'Computer', 'Contact', 'Contract',
     'Infocom', 'Monitor', 'NetworkEquipment',
     'Peripheral', 'Phone', 'Printer', 'Software',
-    'SoftwareLicense', 'Supplier','User', 'Certicate',
+    'SoftwareLicense', 'Supplier','User', 'Certificate',
     'Rack', 'Enclosure', 'PDU', 'Cluster', 'Item_DeviceSimcard'
 ];
 
@@ -248,12 +249,12 @@ $CFG_GLPI["reservation_types"]            = ['Computer', 'Monitor', 'NetworkEqui
 
 $CFG_GLPI["linkuser_types"]               = ['Computer', 'Monitor', 'NetworkEquipment',
     'Peripheral', 'Phone', 'Printer', 'Software',
-    'SoftwareLicense', 'Certificate', 'Appliance', 'Item_DeviceSimcard'
+    'SoftwareLicense', 'Certificate', 'Appliance', 'Item_DeviceSimcard', 'Line'
 ];
 
 $CFG_GLPI["linkgroup_types"]              = ['Computer', 'Consumable', 'Monitor', 'NetworkEquipment',
     'Peripheral', 'Phone', 'Printer', 'Software',
-    'SoftwareLicense', 'Certificate', 'Appliance', 'Item_DeviceSimcard'
+    'SoftwareLicense', 'Certificate', 'Appliance', 'Item_DeviceSimcard', 'Line'
 ];
 
 $CFG_GLPI["linkuser_tech_types"]          = ['Computer', 'ConsumableItem', 'Monitor', 'NetworkEquipment',
@@ -270,7 +271,9 @@ $CFG_GLPI["location_types"]               = ['Budget', 'CartridgeItem', 'Consuma
     'Computer', 'Monitor', "Glpi\\Socket",
     'NetworkEquipment', 'Peripheral', 'Phone',
     'Printer', 'Software', 'SoftwareLicense',
-    'Ticket', 'User', 'Certificate', 'Item_DeviceSimcard'
+    'Ticket', 'User', 'Certificate', 'Item_DeviceSimcard',
+    'Line', 'Appliance', 'PassiveDCEquipment', 'DataCenter',
+    'DCRoom', 'Rack', 'Enclosure', 'PDU'
 ];
 
 $CFG_GLPI["ticket_types"]                 = ['Computer', 'Monitor', 'NetworkEquipment',
@@ -398,8 +401,10 @@ $CFG_GLPI["systeminformations_types"]     = ['AuthLDAP', 'DBConnection', 'MailCo
     'Plugin'
 ];
 
-$CFG_GLPI["rulecollections_types"]        = ['RuleImportAssetCollection',
+$CFG_GLPI["rulecollections_types"]        = [
+    'RuleImportAssetCollection',
     'RuleImportEntityCollection',
+    'RuleLocationCollection',
     'RuleMailCollectorCollection',
     'RuleRightCollection',
     'RuleSoftwareCategoryCollection',
@@ -461,7 +466,7 @@ $CFG_GLPI['user_pref_field'] = ['backcreated', 'csv_delimiter', 'date_format',
     'highcontrast_css', 'default_dashboard_central', 'default_dashboard_assets',
     'default_dashboard_helpdesk', 'default_dashboard_mini_ticket', 'default_central_tab',
     'fold_menu', 'fold_search', 'savedsearches_pinned', 'richtext_layout', 'timeline_order',
-    'itil_layout'
+    'itil_layout', 'timeline_action_btn_layout'
 ];
 
 $CFG_GLPI['lock_lockable_objects'] = ['Budget',  'Change', 'Contact', 'Contract', 'Document',
@@ -481,8 +486,12 @@ $CFG_GLPI['inventory_types'] = [
 ];
 
 $CFG_GLPI['inventory_lockable_objects'] = ['Computer_Item',  'Item_SoftwareLicense',
-    'Item_SoftwareVersion', 'Item_Disk', 'ComputerVirtualMachine',
-    'NetworkPort', 'NetworkName', 'IPAddress'
+    'Item_SoftwareVersion', 'Item_Disk', 'ComputerVirtualMachine','ComputerAntivirus',
+    'NetworkPort', 'NetworkName', 'IPAddress', 'Item_OperatingSystem', 'Item_DeviceBattery', 'Item_DeviceCase',
+    'Item_DeviceControl', 'Item_DeviceDrive', 'Item_DeviceFirmware', 'Item_DeviceGeneric', 'Item_DeviceGraphicCard',
+    'Item_DeviceHardDrive', 'Item_DeviceMemory', 'Item_DeviceMotherboard', 'Item_DeviceNetworkCard', 'Item_DevicePci',
+    'Item_DevicePowerSupply', 'Item_DeviceProcessor', 'Item_DeviceSensor', 'Item_DeviceSimcard', 'Item_DeviceSoundCard',
+    'DatabaseInstance', 'Item_RemoteManagement','Monitor'
 ];
 
 $CFG_GLPI["kb_types"]              = ['Budget', 'Change', 'Computer',
@@ -527,39 +536,36 @@ $CFG_GLPI['databaseinstance_types'] = ['Computer'];
 
 $CFG_GLPI['agent_types'] = ['Computer', 'Phone'];
 
-$dashboard_libs = [
-    'dashboard', 'gridstack',
-    'charts', 'clipboard', 'sortable'
-];
-
 $reservations_libs = ['fullcalendar', 'reservations'];
 
 $CFG_GLPI['javascript'] = [
     'central'   => [
-        'central' => array_merge([
+        'central' => [
             'fullcalendar',
             'planning',
             'masonry',
             'tinymce',
-        ], $dashboard_libs)
+            'dashboard',
+        ]
     ],
     'assets'    => [
-        'dashboard' => $dashboard_libs,
-        'rack'      => ['gridstack', 'rack'],
-        'printer'   => $dashboard_libs,
-        'cable'     => ['cable'],
-        'socket'    => ['cable'],
+        'dashboard'   => ['dashboard'],
+        'rack'        => ['gridstack', 'rack'],
+        'printer'     => ['dashboard'],
+        'cable'       => ['cable'],
+        'socket'      => ['cable'],
+        'networkport' => ['dashboard'],
     ],
     'helpdesk'  => [
-        'dashboard' => $dashboard_libs,
+        'dashboard' => ['dashboard'],
         'planning'  => ['clipboard', 'fullcalendar', 'tinymce', 'planning'],
-        'ticket'    => array_merge(['rateit', 'tinymce', 'kanban'], $dashboard_libs),
+        'ticket'    => ['rateit', 'tinymce', 'kanban', 'dashboard'],
         'problem'   => ['tinymce', 'kanban', 'sortable'],
         'change'    => ['tinymce', 'kanban', 'sortable'],
         'stat'      => ['charts']
     ],
     'tools'     => [
-        'project'                 => ['gantt', 'kanban', 'tinymce', 'sortable'],
+        'project'                 => ['kanban', 'tinymce', 'sortable'],
         'knowbaseitem'            => ['tinymce'],
         'knowbaseitemtranslation' => ['tinymce'],
         'reminder'                => ['tinymce'],
@@ -588,7 +594,13 @@ $CFG_GLPI['javascript'] = [
     ],
     'admin'        => ['clipboard', 'sortable'],
     'preference'   => ['clipboard'],
-    'self-service' => array_merge(['tinymce'], $reservations_libs)
+    'self-service' => array_merge(['tinymce'], $reservations_libs),
+    'tickets'      => [
+        'ticket' => ['tinymce']
+    ],
+    'create_ticket' => ['tinymce'],
+    'reservation'   => array_merge(['tinymce'], $reservations_libs),
+    'faq'           => ['tinymce'],
 ];
 
 // push reservations libs to reservations itemtypes (they shoul in asset sector)

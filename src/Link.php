@@ -2,13 +2,14 @@
 
 /**
  * ---------------------------------------------------------------------
+ *
  * GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2015-2022 Teclib' and contributors.
  *
  * http://glpi-project.org
  *
- * based on GLPI - Gestionnaire Libre de Parc Informatique
- * Copyright (C) 2003-2014 by the INDEPNET Development Team.
+ * @copyright 2015-2022 Teclib' and contributors.
+ * @copyright 2003-2014 by the INDEPNET Development Team.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
  *
  * ---------------------------------------------------------------------
  *
@@ -16,20 +17,23 @@
  *
  * This file is part of GLPI.
  *
- * GLPI is free software; you can redistribute it and/or modify
+ * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * GLPI is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GLPI. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  * ---------------------------------------------------------------------
  */
+
+use Glpi\Toolbox\URL;
 
 /** Link Class
  **/
@@ -257,15 +261,20 @@ class Link extends CommonDBTM
 
 
     /**
-     * Generate link
+     * Generate link(s).
      *
-     * @param $link    string   original string content
-     * @param $item             CommonDBTM object: item used to make replacements
+     * @param string        $link       original string content
+     * @param CommonDBTM    $item       item used to make replacements
+     * @param bool          $safe_url   indicates whether URL should be sanitized or not
      *
      * @return array of link contents (may have several when item have several IP / MAC cases)
-     **/
-    public static function generateLinkContents($link, CommonDBTM $item)
+     *
+     * @FIXME Uncomment $safe_url parameter declaration in GLPI 10.1.
+     */
+    public static function generateLinkContents($link, CommonDBTM $item/*, bool $safe_url = true*/)
     {
+        $safe_url = func_num_args() === 3 ? func_get_arg(2) : true;
+
         global $DB, $CFG_GLPI;
 
        // Replace [FIELD:<field name>]
@@ -403,6 +412,9 @@ class Link extends CommonDBTM
         $replace_MAC = strstr($link, "[MAC]");
 
         if (!$replace_IP && !$replace_MAC) {
+            if ($safe_url) {
+                $link = URL::sanitizeURL($link) ?: '#';
+            }
             return [$link];
         }
        // Return several links id several IP / MAC
@@ -547,6 +559,9 @@ class Link extends CommonDBTM
                 }
 
                 if ($disp) {
+                    if ($safe_url) {
+                        $tmplink = URL::sanitizeURL($tmplink) ?: '#';
+                    }
                     $links[$key] = $tmplink;
                 }
             }
@@ -554,6 +569,9 @@ class Link extends CommonDBTM
 
         if (count($links)) {
             return $links;
+        }
+        if ($safe_url) {
+            $link = URL::sanitizeURL($link) ?: '#';
         }
         return [$link];
     }
@@ -637,12 +655,12 @@ class Link extends CommonDBTM
             $params['name'] = $params['link'];
         }
 
-        $names = $item->generateLinkContents($params['name'], $item);
+        $names = $item->generateLinkContents($params['name'], $item, false);
         $file  = trim($params['data']);
 
         if (empty($file)) {
            // Generate links
-            $links = $item->generateLinkContents($params['link'], $item);
+            $links = $item->generateLinkContents($params['link'], $item, true);
             $i     = 1;
             foreach ($links as $key => $val) {
                 $name    = (isset($names[$key]) ? $names[$key] : reset($names));
@@ -660,8 +678,8 @@ class Link extends CommonDBTM
             }
         } else {
            // Generate files
-            $files = $item->generateLinkContents($params['link'], $item);
-            $links = $item->generateLinkContents($params['data'], $item);
+            $files = $item->generateLinkContents($params['link'], $item, false);
+            $links = $item->generateLinkContents($params['data'], $item, false);
             $i     = 1;
             foreach ($links as $key => $val) {
                 $name = (isset($names[$key]) ? $names[$key] : reset($names));
